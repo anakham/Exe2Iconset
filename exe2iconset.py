@@ -17,7 +17,7 @@ class IconExtractorApp:
         self.root.geometry("900x700")
         
         # Configure styles
-        self.root.configure(bg='#f0f0f0')
+        # self.root.configure(bg='#f0f0f0')
         
         # Variables
         self.exe_path = tk.StringVar()
@@ -74,7 +74,7 @@ class IconExtractorApp:
         icon_canvas_frame.columnconfigure(0, weight=1)
         icon_canvas_frame.rowconfigure(0, weight=1)
         
-        canvas = tk.Canvas(icon_canvas_frame, bg='white', highlightthickness=1, highlightbackground='#ccc')
+        canvas = tk.Canvas(icon_canvas_frame, highlightthickness=1, highlightbackground='#ccc')
         canvas.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         scrollbar = ttk.Scrollbar(icon_canvas_frame, orient="vertical", command=canvas.yview)
@@ -111,7 +111,7 @@ class IconExtractorApp:
         status_frame.columnconfigure(0, weight=1)
         
         self.status_text = tk.Text(status_frame, height=6, width=80, state=tk.DISABLED, 
-                                   bg='#f8f8f8', relief=tk.FLAT)
+                                   relief=tk.FLAT)
         self.status_text.grid(row=0, column=0, sticky=(tk.W, tk.E))
         
         # Configure grid weights for main frame rows
@@ -123,7 +123,7 @@ class IconExtractorApp:
         
         # Check for 7z
         try:
-            subprocess.run(['7z', '--help'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            subprocess.run(['7z', '--help'], capture_output=True)
         except FileNotFoundError:
             missing_tools.append("7-Zip (7z.exe)")
         
@@ -148,8 +148,8 @@ class IconExtractorApp:
     
     def browse_exe(self):
         filename = filedialog.askopenfilename(
-            title="Select Windows Executable",
-            filetypes=[("Executable files", "*.exe"), ("All files", "*.*")]
+            title="Select Windows File with Resources",
+            filetypes=[("Windows files with resources", "*.exe *.dll *.mun"), ("All files", "*.*")]
         )
         if filename:
             self.exe_path.set(filename)
@@ -187,7 +187,7 @@ class IconExtractorApp:
             cmd = ['7z', 'x', self.exe_path.get(), '-o' + self.temp_dir, '-y']
             
             # Run 7z extraction
-            result = subprocess.run(cmd, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            result = subprocess.run(cmd, capture_output=True, text=True)
             
             if result.returncode != 0:
                 self.log_status(f"Extraction failed: {result.stderr}")
@@ -300,7 +300,7 @@ class IconExtractorApp:
                     child.configure(relief=tk.RAISED)
     
     def create_icns(self):
-        if not self.selected_series_key or not self.icon_series.get(self.selected_series_key):
+        if (self.selected_series_key is None) or not self.icon_series.get(self.selected_series_key):
             messagebox.showerror("Error", "Please select an icon series first")
             return
         
