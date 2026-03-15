@@ -260,6 +260,27 @@ class IconExtractorApp:
         
         return results
 
+    def _fix_dib_data(self, data):
+        """Fix DIB (BMP) data from RT_ICON resources for proper PIL loading."""
+        if len(data) < 4:
+            return data
+        
+        header_size = int.from_bytes(data[0:4], 'little')
+        if header_size != 40:
+            return data
+        
+        biHeight = int.from_bytes(data[8:12], 'little', signed=True)
+        if biHeight < 0:
+            return data
+        
+        biWidth = int.from_bytes(data[4:8], 'little', signed=True)
+        if biWidth <= 0:
+            return data
+        
+        fixed_data = bytearray(data)
+        struct.pack_into('<i', fixed_data, 8, biHeight // 2)
+        return bytes(fixed_data)
+
     def extract_icons_from_pe(self, file_path):
         """Extract icon groups from PE resources using pefile."""
         try:
@@ -363,7 +384,8 @@ class IconExtractorApp:
             if icon_data_list:
                 try:
                     first_icon = icon_data_list[0]
-                    img = Image.open(BytesIO(first_icon['data']))
+                    img_data = self._fix_dib_data(first_icon['data'])
+                    img = Image.open(BytesIO(img_data))
                     img = img.resize((64, 64), Image.Resampling.LANCZOS)
                     
                     photo = ImageTk.PhotoImage(img)
@@ -465,7 +487,8 @@ class IconExtractorApp:
                     src_w, src_h, src_data = best_source
                     
                     try:
-                        img = Image.open(BytesIO(src_data))
+                        img_data = self._fix_dib_data(src_data)
+                        img = Image.open(BytesIO(img_data))
                         if img.mode != 'RGBA':
                             img = img.convert('RGBA')
                         
