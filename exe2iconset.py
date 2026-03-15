@@ -277,6 +277,20 @@ class IconExtractorApp:
         if biWidth <= 0:
             return data
         
+        biBitCount = int.from_bytes(data[14:16], 'little')
+        
+        if biBitCount == 32:
+            actual_height = biHeight // 2
+            pixel_data = data[40:40 + biWidth * actual_height * 4]
+            ba = bytearray(pixel_data)
+            for i in range(0, len(ba), 4):
+                ba[i], ba[i+2] = ba[i+2], ba[i]
+            
+            img = Image.frombytes('RGBA', (biWidth, actual_height), bytes(ba), 'raw')
+            buf = BytesIO()
+            img.save(buf, 'PNG')
+            return buf.getvalue()
+        
         fixed_data = bytearray(data)
         struct.pack_into('<i', fixed_data, 8, biHeight // 2)
         return bytes(fixed_data)
