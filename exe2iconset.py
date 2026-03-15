@@ -322,33 +322,28 @@ class IconExtractorApp:
                     offset += 14
 
                 group_key = f"icongroup_{group_id}"
-                ico_header = struct.pack('<HHH', 0, 1, len(entries))
-                dir_entries = b''
-                image_data = b''
-                image_offset = 6 + 16 * len(entries)
+                icon_list = []
 
                 for e in entries:
                     rid = e['id']
                     icon_data = icon_by_id.get(rid)
                     if not icon_data:
                         continue
-                    size2 = len(icon_data)
                     width = e['width'] if e['width'] != 0 else 256
                     height = e['height'] if e['height'] != 0 else 256
-                    dir_entries += struct.pack('<BBBBHHII', width if width<=255 else 0, height if height<=255 else 0, e['color_count'], 0, e['planes'], e['bit_count'], size2, image_offset)
-                    image_data += icon_data
-                    image_offset += size2
+                    icon_list.append({
+                        'width': width,
+                        'height': height,
+                        'data': icon_data
+                    })
 
-                if dir_entries:
-                    ico_bytes = ico_header + dir_entries + image_data
-                    if group_key not in groups:
-                        groups[group_key] = []
-                    groups[group_key].append(ico_bytes)
+                if icon_list:
+                    groups[group_key] = icon_list
                 else:
                     self.log_status(f"Warning: Icon group {group_id} has no valid icons")
 
-            for group_key in groups:
-                self.log_status(f"Debug: Group {group_key}: {len(groups[group_key])} icon(s)")
+            for group_key, icon_list in groups.items():
+                self.log_status(f"Debug: Group {group_key}: {len(icon_list)} icon(s)")
 
             return groups
 
@@ -367,8 +362,8 @@ class IconExtractorApp:
             
             if icon_data_list:
                 try:
-                    img_data = icon_data_list[0]
-                    img = Image.open(BytesIO(img_data))
+                    first_icon = icon_data_list[0]
+                    img = Image.open(BytesIO(first_icon['data']))
                     img = img.resize((64, 64), Image.Resampling.LANCZOS)
                     
                     photo = ImageTk.PhotoImage(img)
@@ -443,10 +438,10 @@ class IconExtractorApp:
             ]
             
             icon_sizes = []
-            for icon_data in icon_data_list:
+            for icon_entry in icon_data_list:
                 try:
-                    img = Image.open(BytesIO(icon_data))
-                    icon_sizes.append((img.width, img.height, icon_data))
+                    img = Image.open(BytesIO(icon_entry['data']))
+                    icon_sizes.append((icon_entry['width'], icon_entry['height'], icon_entry['data']))
                 except Exception as e:
                     self.log_status(f"Warning: Could not read icon data: {str(e)}")
                     continue
