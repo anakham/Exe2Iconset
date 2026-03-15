@@ -5,7 +5,7 @@ import sys
 import tempfile
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageOps
 import shutil
 from pathlib import Path
 import json
@@ -287,6 +287,7 @@ class IconExtractorApp:
                 ba[i], ba[i+2] = ba[i+2], ba[i]
             
             img = Image.frombytes('RGBA', (biWidth, actual_height), bytes(ba), 'raw')
+            img = ImageOps.flip(img)
             buf = BytesIO()
             img.save(buf, 'PNG')
             return buf.getvalue()
