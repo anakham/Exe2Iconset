@@ -52,16 +52,4 @@ The application automatically creates icons in these standard macOS sizes:
 
 The application handles errors gracefully and provides status updates throughout the process.
 
-## GitHub Repository Context
-
-- **Repository**: https://github.com/anakham/Exe2Iconset
-- **Open issues** (7 as of March 2026):
-  - #9 Make application bundle
-  - #8 Allow using all image files as icons.
-  - #7 Drag and drop support
-  - #6 Tune .gitignore
-  - #5 Inspect which platforms can be used to run application
-  - #4 Improve UI design
-  - #3 Implement correct extraction of icon groups algorithm
-
 For the latest issue list and details, see: https://github.com/anakham/Exe2Iconset/issues
