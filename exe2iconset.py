@@ -196,35 +196,6 @@ class IconExtractorApp:
             self.log_status(f"Error during extraction: {str(e)}")
             return
 
-    def _traverse_resource_directory(self, pe, entry, depth=0, results=None):
-        """Recursively traverse resource directory entries."""
-        if results is None:
-            results = []
-        
-        indent = "  " * depth
-        self.log_status(f"Debug: {indent}Level {depth}, entries: {len(entry.directory.entries)}")
-        
-        for idx, sub_entry in enumerate(entry.directory.entries):
-            entry_id = sub_entry.id if sub_entry.id else 0
-            entry_name = sub_entry.name if sub_entry.name else None
-            
-            self.log_status(f"Debug: {indent}  [{idx}] id={entry_id}, name={entry_name}")
-            
-            if hasattr(sub_entry, 'directory') and sub_entry.directory:
-                self._traverse_resource_directory(pe, sub_entry, depth + 1, results)
-            elif hasattr(sub_entry, 'data') and sub_entry.data:
-                rva = sub_entry.data.struct.OffsetToData
-                size = sub_entry.data.struct.Size
-                results.append({
-                    'id': entry_id,
-                    'name': entry_name,
-                    'rva': rva,
-                    'size': size,
-                    'depth': depth
-                })
-        
-        return results
-
     def _extract_resources_by_type(self, pe, resource_type_id):
         """Extract all resources of a specific type with proper recursion."""
         results = []
@@ -232,9 +203,11 @@ class IconExtractorApp:
         if not hasattr(pe, 'DIRECTORY_ENTRY_RESOURCE'):
             return results
         
+        resource_type_name = pefile.RESOURCE_TYPE.get(resource_type_id, f"UNKNOWN_{resource_type_id}")
+        
         for entry in pe.DIRECTORY_ENTRY_RESOURCE.entries:
             if entry.id == resource_type_id:
-                self.log_status(f"Debug: Found RT_{'ICON' if resource_type_id == 3 else 'GROUP_ICON'} (ID={resource_type_id})")
+                self.log_status(f"Debug: Found {resource_type_name} (ID={resource_type_id})")
                 
                 if hasattr(entry, 'directory') and entry.directory:
                     for sub_entry in entry.directory.entries:
@@ -248,13 +221,13 @@ class IconExtractorApp:
                                 lang_id = lang_entry.id if lang_entry.id else 0
                                 
                                 if hasattr(lang_entry, 'data') and lang_entry.data:
-                                    rva = lang_entry.data.struct.OffsetToData
+                                    offset = lang_entry.data.struct.OffsetToData
                                     size = lang_entry.data.struct.Size
                                     results.append({
                                         'id': sub_id,
                                         'name': sub_name,
                                         'lang': lang_id,
-                                        'rva': rva,
+                                        'offset': offset,
                                         'size': size
                                     })
         
@@ -296,6 +269,28 @@ class IconExtractorApp:
         struct.pack_into('<i', fixed_data, 8, biHeight // 2)
         return bytes(fixed_data)
 
+    def _read_icon_image(self, pe, offset, size):
+        """Read icon image from PE file and return RGBA PIL Image.
+        
+        Args:
+            pe: pefile.PE object
+            offset: offset to icon data in memory-mapped image
+            size: size of icon data
+            
+        Returns:
+            PIL Image in RGBA format, or None if extraction fails
+        """
+        raw_data = pe.get_memory_mapped_image()[offset:offset+size]
+        fixed_data = self._fix_dib_data(raw_data)
+        
+        try:
+            img = Image.open(BytesIO(fixed_data))
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            return img
+        except Exception:
+            return None
+
     def extract_icons_from_pe(self, file_path):
         """Extract icon groups from PE resources using pefile."""
         try:
@@ -322,17 +317,19 @@ class IconExtractorApp:
             self.log_status(f"Debug: Found {len(rt_icon_resources)} RT_ICON entries")
             
             for res in rt_icon_resources:
-                data = pe.get_memory_mapped_image()[res['rva']:res['rva']+res['size']]
-                icon_by_id[res['id']] = data
+                icon_by_id[(res['id'], res['lang'])] = {
+                    'offset': res['offset'],
+                    'size': res['size']
+                }
 
             rt_group_resources = self._extract_resources_by_type(pe, pefile.RESOURCE_TYPE['RT_GROUP_ICON'])
             self.log_status(f"Debug: Found {len(rt_group_resources)} RT_GROUP_ICON entries")
             
-            group_icon_entries = [(res['id'], res['rva'], res['size']) for res in rt_group_resources]
+            group_icon_entries = [(res['id'], res['lang'], res['offset'], res['size']) for res in rt_group_resources]
 
             # Parse each group icon after all ICON resources are collected
-            for group_id, data_rva, size in group_icon_entries:
-                data = pe.get_memory_mapped_image()[data_rva:data_rva+size]
+            for group_id, group_lang, data_offset, size in group_icon_entries:
+                data = pe.get_memory_mapped_image()[data_offset:data_offset+size]
                 if len(data) < 6:
                     continue
 
@@ -357,21 +354,23 @@ class IconExtractorApp:
                     })
                     offset += 14
 
-                group_key = f"icongroup_{group_id}"
+                group_key = f"icongroup_{group_id}_{group_lang}"
                 icon_list = []
 
                 for e in entries:
                     rid = e['id']
-                    icon_data = icon_by_id.get(rid)
+                    icon_data = icon_by_id.get((rid, group_lang))
                     if not icon_data:
                         continue
                     width = e['width'] if e['width'] != 0 else 256
                     height = e['height'] if e['height'] != 0 else 256
-                    icon_list.append({
-                        'width': width,
-                        'height': height,
-                        'data': icon_data
-                    })
+                    img = self._read_icon_image(pe, icon_data.get('offset', 0), icon_data.get('size', 0))
+                    if img:
+                        icon_list.append({
+                            'width': width,
+                            'height': height,
+                            'image': img
+                        })
 
                 if icon_list:
                     groups[group_key] = icon_list
@@ -399,9 +398,7 @@ class IconExtractorApp:
             if icon_data_list:
                 try:
                     first_icon = icon_data_list[0]
-                    img_data = self._fix_dib_data(first_icon['data'])
-                    img = Image.open(BytesIO(img_data))
-                    img = img.resize((64, 64), Image.Resampling.LANCZOS)
+                    img = first_icon['image'].resize((64, 64), Image.Resampling.LANCZOS)
                     
                     photo = ImageTk.PhotoImage(img)
                     
@@ -477,8 +474,8 @@ class IconExtractorApp:
             icon_sizes = []
             for icon_entry in icon_data_list:
                 try:
-                    img = Image.open(BytesIO(icon_entry['data']))
-                    icon_sizes.append((icon_entry['width'], icon_entry['height'], icon_entry['data']))
+                    img = icon_entry['image'].copy()
+                    icon_sizes.append((icon_entry['width'], icon_entry['height'], img))
                 except Exception as e:
                     self.log_status(f"Warning: Could not read icon data: {str(e)}")
                     continue
@@ -499,15 +496,11 @@ class IconExtractorApp:
                         best_source = (src_w, src_h, src_data)
                 
                 if best_source:
-                    src_w, src_h, src_data = best_source
+                    src_w, src_h, src_img = best_source
+                    src_img = src_img.copy()
                     
                     try:
-                        img_data = self._fix_dib_data(src_data)
-                        img = Image.open(BytesIO(img_data))
-                        if img.mode != 'RGBA':
-                            img = img.convert('RGBA')
-                        
-                        resized = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                        resized = src_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
                         
                         regular_name = f"icon_{target_w}x{target_h}.png"
                         regular_path = os.path.join(iconset_path, regular_name)
@@ -518,7 +511,7 @@ class IconExtractorApp:
                         retina_path = os.path.join(iconset_path, retina_name)
                         
                         if src_w >= target_w and src_h >= target_h:
-                            retina_img = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                            retina_img = resized
                             retina_img.save(retina_path, 'PNG')
                             created_files.append(retina_path)
                     
