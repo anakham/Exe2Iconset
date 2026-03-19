@@ -130,16 +130,7 @@ class IconExtractorApp:
         if pefile is None:
             missing_tools.append("pefile (Python package)")
 
-        # Check for iconutil (macOS) - we'll use alternative if not available
-        self.iconutil_available = False
-        if sys.platform == 'darwin':
-            try:
-                subprocess.run(['iconutil', '--help'], capture_output=True)
-                self.iconutil_available = True
-            except FileNotFoundError:
-                self.log_status("Note: iconutil not found, will use PNG conversion only")
-        
-        # Check for PIL
+        # Check for PIL (used for ICNS creation - cross-platform)
         try:
             Image.__version__
         except:
@@ -520,16 +511,25 @@ class IconExtractorApp:
             
             self.log_status(f"Created {len(created_files)} PNG files in iconset.")
             
-            # Create ICNS file if iconutil is available
+            # Create ICNS file using Pillow (cross-platform)
             icns_path = os.path.join(output_dir, self.output_name.get() + ".icns")
             
-            if self.iconutil_available and sys.platform == 'darwin':
-                # Use macOS iconutil to create ICNS
-                cmd = ['iconutil', '-c', 'icns', iconset_path, '-o', icns_path]
+            try:
+                # Find the largest PNG to use as base for ICNS
+                largest_png = None
+                largest_size = 0
+                for f in os.listdir(iconset_path):
+                    if f.endswith('.png'):
+                        png_path = os.path.join(iconset_path, f)
+                        img = Image.open(png_path)
+                        if img.size[0] > largest_size:
+                            largest_size = img.size[0]
+                            largest_png = png_path
                 
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                
-                if result.returncode == 0:
+                if largest_png:
+                    # Use Pillow to create ICNS (works on all platforms)
+                    img = Image.open(largest_png)
+                    img.save(icns_path, format='ICNS')
                     self.log_status(f"Successfully created ICNS file: {icns_path}")
                     
                     # Optionally clean up iconset directory
@@ -541,23 +541,11 @@ class IconExtractorApp:
                     if not response:
                         shutil.rmtree(iconset_path)
                 else:
-                    self.log_status(f"iconutil failed: {result.stderr}")
+                    self.log_status(f"No PNG files found in iconset")
                     self.log_status(f"PNG files saved in: {iconset_path}")
-            else:
-                # For Windows or without iconutil, just save the PNGs
-                self.log_status(f"PNG iconset created at: {iconset_path}")
-                self.log_status("Note: On macOS, use 'iconutil -c icns <iconset>' to create ICNS")
-                
-                # Create a simple batch script for macOS users
-                if sys.platform != 'darwin':
-                    script_path = os.path.join(output_dir, "create_icns_mac.command")
-                    with open(script_path, 'w') as f:
-                        f.write("#!/bin/bash\n")
-                        f.write(f'iconutil -c icns "{iconset_name}"\n')
-                        f.write('echo "ICNS file created!"\n')
-                    
-                    os.chmod(script_path, 0o755)
-                    self.log_status(f"Created macOS conversion script: {script_path}")
+            except Exception as e:
+                self.log_status(f"Failed to create ICNS: {str(e)}")
+                self.log_status(f"PNG files saved in: {iconset_path}")
             
             # Open output directory
             if sys.platform == 'win32':
