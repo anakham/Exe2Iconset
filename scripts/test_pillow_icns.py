@@ -18,11 +18,22 @@ def test_pillow_icns_write():
     iconset_path = "/tmp/test.iconset"
     os.makedirs(iconset_path, exist_ok=True)
     
-    for width, height in icon_sizes:
-        img = Image.new('RGBA', (width, height), (255, 0, 0, 255))
+    # Different colors for different sizes to verify each size is included
+    colors = [
+        (255, 0, 0, 255),    # 16 - Red
+        (0, 255, 0, 255),    # 32 - Green
+        (0, 0, 255, 255),    # 64 - Blue
+        (255, 255, 0, 255),  # 128 - Yellow
+        (255, 0, 255, 255),  # 256 - Magenta
+        (0, 255, 255, 255),  # 512 - Cyan
+        (128, 128, 128, 255), # 1024 - Gray
+    ]
+    
+    for (width, height), color in zip(icon_sizes, colors):
+        img = Image.new('RGBA', (width, height), color)
         png_path = os.path.join(iconset_path, f"icon_{width}x{height}.png")
         img.save(png_path, 'PNG')
-        print(f"Created: icon_{width}x{height}.png")
+        print(f"Created: icon_{width}x{height}.png ({color[:3]})")
     
     # Test 1: Direct ICNS save
     print("\n--- Test 1: Pillow direct ICNS ---")
