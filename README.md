@@ -51,3 +51,5 @@ The application automatically creates icons in these standard macOS sizes:
 - Both regular and @2x (retina) versions where possible
 
 The application handles errors gracefully and provides status updates throughout the process.
+
+For the latest issue list and details, see: https://github.com/anakham/Exe2Iconset/issues
