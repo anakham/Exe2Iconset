@@ -17,6 +17,165 @@ try:
 except ImportError:
     pefile = None
 
+
+# PackBits compression for ICNS small icons (icp4/icp5)
+def pack_bits_compress(data):
+    """PackBits compression for bytes."""
+    ret = []
+    buf = []
+    i = 0
+
+    def flush_buf():
+        if len(buf) > 0:
+            ret.append(len(buf) - 1)
+            ret.extend(buf)
+            buf.clear()
+
+    end = len(data)
+    while i < end:
+        arr = data[i:i + 3]
+        x = arr[0]
+        if len(arr) == 3 and x == arr[1] and x == arr[2]:
+            flush_buf()
+            c = 3
+            while (i + c) < end and data[i + c] == x:
+                c += 1
+            i += c
+            while c > 130:
+                ret.append(0xFF)
+                ret.append(x)
+                c -= 130
+            if c > 2:
+                ret.append(c + 0x7D)
+                ret.append(x)
+            else:
+                i -= c
+        else:
+            buf.append(x)
+            if len(buf) > 127:
+                flush_buf()
+            i += 1
+    flush_buf()
+    return bytes(ret)
+
+
+def create_icns_file(iconset_path, icns_path):
+    """Create ICNS file from iconset directory.
+    
+    Uses PNG for main icons (ic07-ic14) and PackBits RGB for small icons (icp4/icp5).
+    """
+    # Map of icon types (by display size)
+    # Only icp4/icp5 support PackBits RGB, others use PNG
+    # icp4 = 16x16, icp5 = 32x32, ic07 = 128x128, ic08 = 256x256, ic09 = 512x512, ic10 = 1024x1024
+    # ic11 = 32 (16@2x), ic12 = 64 (32@2x), ic13 = 256 (128@2x), ic14 = 512 (256@2x)
+    icon_type_map = {
+        (16, 16): b'icp4',    # PackBits RGB
+        (32, 32): b'icp5',    # PackBits RGB
+        (64, 64): b'ic12',    # PNG (no icp6 support in iconutil)
+        (128, 128): b'ic07',   # PNG
+        (256, 256): b'ic08',   # PNG
+        (512, 512): b'ic09',   # PNG
+        (1024, 1024): b'ic10', # PNG
+    }
+    
+    retina_type_map = {
+        (16, 16): b'ic11',   # 16@2x: 32 stored, 16 display
+        (32, 32): b'ic12',   # 32@2x: 64 stored, 32 display
+        (128, 128): b'ic13', # 128@2x: 256 stored, 128 display
+        (256, 256): b'ic14', # 256@2x: 512 stored, 256 display
+    }
+    
+    blocks = []
+    
+    # Read all PNG files from iconset
+    for filename in os.listdir(iconset_path):
+        if not filename.endswith('.png'):
+            continue
+            
+        filepath = os.path.join(iconset_path, filename)
+        
+        # Parse size from filename (e.g., "icon_128x128.png" or "icon_128x128@2x.png")
+        name = filename[:-4]  # remove .png
+        
+        is_retina = '@2x' in name
+        name_parts = name.replace('@2x', '').split('x')
+        
+        if len(name_parts) != 2:
+            continue
+            
+        try:
+            width = int(name_parts[0])
+            height = int(name_parts[1])
+        except ValueError:
+            continue
+        
+        # Read PNG data
+        with open(filepath, 'rb') as f:
+            png_data = f.read()
+        
+        # Determine icon type
+        if is_retina:
+            # For retina: stored size is 2x the display size
+            # icon_128x128@2x.png = 256x256 stored, 128x128 display -> ic13
+            actual_width = width * 2
+            actual_height = height * 2
+            icon_type = retina_type_map.get((width, height))
+        else:
+            actual_width = width
+            actual_height = height
+            icon_type = icon_type_map.get((width, height))
+        
+        if not icon_type:
+            continue
+        
+        # For small icons (icp4, icp5), use PackBits RGB instead of PNG
+        if icon_type in [b'icp4', b'icp5']:
+            img = Image.open(filepath)
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            
+            # Extract channels and compress with PackBits
+            pixels = list(img.getdata())
+            r_channel = []
+            g_channel = []
+            b_channel = []
+            
+            for r, g, b, a in pixels:
+                r_channel.append(r)
+                g_channel.append(g)
+                b_channel.append(b)
+            
+            r_compressed = pack_bits_compress(bytes(r_channel))
+            g_compressed = pack_bits_compress(bytes(g_channel))
+            b_compressed = pack_bits_compress(bytes(b_channel))
+            
+            block_data = r_compressed + g_compressed + b_compressed
+        else:
+            block_data = png_data
+        
+        # Create block header
+        block = icon_type + struct.pack('>I', len(block_data) + 8) + block_data
+        blocks.append((icon_type, block))
+    
+    if not blocks:
+        return False
+    
+    # Sort blocks by type (icp types first, then ic0* types)
+    blocks.sort(key=lambda x: x[0])
+    
+    # Build ICNS file
+    blocks_data = b''.join(block for _, block in blocks)
+    
+    # ICNS header
+    total_size = 8 + len(blocks_data)
+    icns_data = b'icns' + struct.pack('>I', total_size) + blocks_data
+    
+    # Write to file
+    with open(icns_path, 'wb') as f:
+        f.write(icns_data)
+    
+    return True
+
 class IconExtractorApp:
     def __init__(self, root):
         self.root = root
@@ -511,25 +670,11 @@ class IconExtractorApp:
             
             self.log_status(f"Created {len(created_files)} PNG files in iconset.")
             
-            # Create ICNS file using Pillow (cross-platform)
+            # Create ICNS file using custom implementation with proper icon types
             icns_path = os.path.join(output_dir, self.output_name.get() + ".icns")
             
             try:
-                # Find the largest PNG to use as base for ICNS
-                largest_png = None
-                largest_size = 0
-                for f in os.listdir(iconset_path):
-                    if f.endswith('.png'):
-                        png_path = os.path.join(iconset_path, f)
-                        img = Image.open(png_path)
-                        if img.size[0] > largest_size:
-                            largest_size = img.size[0]
-                            largest_png = png_path
-                
-                if largest_png:
-                    # Use Pillow to create ICNS (works on all platforms)
-                    img = Image.open(largest_png)
-                    img.save(icns_path, format='ICNS')
+                if create_icns_file(iconset_path, icns_path):
                     self.log_status(f"Successfully created ICNS file: {icns_path}")
                     
                     # Optionally clean up iconset directory
@@ -541,7 +686,7 @@ class IconExtractorApp:
                     if not response:
                         shutil.rmtree(iconset_path)
                 else:
-                    self.log_status(f"No PNG files found in iconset")
+                    self.log_status(f"Failed to create ICNS")
                     self.log_status(f"PNG files saved in: {iconset_path}")
             except Exception as e:
                 self.log_status(f"Failed to create ICNS: {str(e)}")
