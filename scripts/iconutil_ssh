@@ -1,0 +1,64 @@
+#!/bin/bash
+#
+# iconutil_ssh - Transparent wrapper for iconutil on remote MacOS host
+# Automatically handles file copying via SCP
+#
+# Usage: iconutil_ssh [--convert icns|iconset] <input.iconset> [-o <output.icns>]
+#        iconutil_ssh [--convert iconset] <input.icns> [-o <output.iconset>]
+
+SSH_USER="anakham-ai"
+SSH_HOST="mac-sandbox"
+REMOTE_WORKDIR="/Users/anakham-ai/Documents/Projects/Exe2Iconset"
+
+# Find input and output files from arguments
+INPUT_FILE=""
+OUTPUT_FILE=""
+CONVERT_MODE=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --convert)
+            CONVERT_MODE="$1 $2"
+            shift 2
+            ;;
+        -o)
+            OUTPUT_FILE="$2"
+            shift 2
+            ;;
+        *)
+            if [[ -z "$INPUT_FILE" ]]; then
+                INPUT_FILE="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Get basenames
+INPUT_BASENAME=$(basename "$INPUT_FILE")
+if [[ -n "$OUTPUT_FILE" ]]; then
+    OUTPUT_BASENAME=$(basename "$OUTPUT_FILE")
+fi
+
+# Copy input to remote
+if [[ -n "$INPUT_FILE" && -e "$INPUT_FILE" ]]; then
+    if [[ -d "$INPUT_FILE" ]]; then
+        scp -r "$INPUT_FILE" "$SSH_USER@$SSH_HOST:$REMOTE_WORKDIR/"
+    else
+        scp "$INPUT_FILE" "$SSH_USER@$SSH_HOST:$REMOTE_WORKDIR/"
+    fi
+fi
+
+# Build remote command
+REMOTE_CMD="cd '$REMOTE_WORKDIR' && iconutil $CONVERT_MODE '$INPUT_BASENAME'"
+if [[ -n "$OUTPUT_BASENAME" ]]; then
+    REMOTE_CMD="$REMOTE_CMD --output '$OUTPUT_BASENAME'"
+fi
+
+# Run iconutil on remote
+ssh "$SSH_USER@$SSH_HOST" "$REMOTE_CMD"
+
+# Copy output back
+if [[ -n "$OUTPUT_BASENAME" ]]; then
+    scp -r "$SSH_USER@$SSH_HOST:$REMOTE_WORKDIR/$OUTPUT_BASENAME" .
+fi

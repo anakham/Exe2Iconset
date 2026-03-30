@@ -3,49 +3,65 @@
 
 from PIL import Image
 import icnsutil
+from icnsutil.ArgbImage import ArgbImage
 import io
 import os
 
 def test_icnsutil():
     """Test icnsutil ICNS creation with different colors."""
     
-    # Standard macOS icon sizes and their ICNS types
+    # icp4, icp5 support RGB format (PackBits compressed)
+    # ic07-ic14 are PNG formats
+    # Each type has FIXED display size - we must provide PNG at exactly that size!
     icon_configs = [
-        (16, 16, 'icp4'),      # 16px
-        (32, 32, 'icp5'),      # 32px
-        (64, 64, 'icp6'),      # 64px
-        (128, 128, 'ic07'),    # 128px
-        (256, 256, 'ic08'),    # 256px (or @2x for 512px stored)
-        (512, 512, 'ic09'),    # 512px (or @2x for 1024px stored)
-        (1024, 1024, 'ic10'),  # 1024px (or @2x for 2048px stored)
+        # Small icons - use RGB format (PackBits compressed)
+        (16, 16, 'icp4', 'rgb'),      # icp4 = 16x16 display
+        (32, 32, 'icp5', 'rgb'),      # icp5 = 32x32 display
+        # Main icons - use PNG
+        (128, 128, 'ic07', 'png'),    # ic07 = 128x128 display
+        (256, 256, 'ic08', 'png'),    # ic08 = 256x256 display
+        (512, 512, 'ic09', 'png'),    # ic09 = 512x512 display
+        (1024, 1024, 'ic10', 'png'),   # ic10 = 1024x1024 display
+        # Retina: stored at 2x, displayed at 1x - use PNG
+        (256, 256, 'ic13', 'png'),    # ic13 = 256 display (stored 512)
+        (512, 512, 'ic14', 'png'),     # ic14 = 512 display (stored 1024)
     ]
     
-    # Different colors for each size
+    # Different colors for each icns type
     colors = [
-        (255, 0, 0, 255),       # 16 - Red
-        (0, 255, 0, 255),       # 32 - Green
-        (0, 0, 255, 255),       # 64 - Blue
-        (255, 255, 0, 255),     # 128 - Yellow
-        (255, 0, 255, 255),     # 256 - Magenta
-        (0, 255, 255, 255),     # 512 - Cyan
-        (128, 128, 128, 255),   # 1024 - Gray
+        (255, 0, 0, 255),       # icp4 (16x16) - Red
+        (0, 255, 0, 255),       # icp5 (32x32) - Green
+        (255, 255, 0, 255),     # ic07 (128x128) - Yellow
+        (255, 0, 255, 255),     # ic08 (256x256) - Magenta
+        (0, 255, 255, 255),     # ic09 (512x512) - Cyan
+        (128, 128, 128, 255),   # ic10 (1024x1024) - Gray
+        (255, 128, 0, 255),     # ic13 (256 display) - Orange
+        (0, 128, 255, 255),     # ic14 (512 display) - Sky Blue
     ]
     
     print("--- Creating ICNS with icnsutil ---")
     
     icns = icnsutil.IcnsFile()
     
-    for (w, h, icns_type), color in zip(icon_configs, colors):
+    for (w, h, icns_type, fmt), color in zip(icon_configs, colors):
         img = Image.new('RGBA', (w, h), color)
-        buf = io.BytesIO()
-        img.save(buf, format='PNG')
-        png_data = buf.getvalue()
         
-        icns.add_media(data=png_data, key=icns_type)
-        print(f"Added: {w}x{h} as {icns_type} (RGBA{tuple(color[:3])})")
+        if fmt == 'rgb':
+            # Use ArgbImage for RGB format (PackBits compressed)
+            argb_img = ArgbImage(image=img)
+            data = argb_img.rgb_data(compress=True)
+            print(f"Added: {w}x{h} as {icns_type} (RGB, {len(data)} bytes) - RGBA{tuple(color[:3])}")
+        else:
+            # Use PNG format
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            data = buf.getvalue()
+            print(f"Added: {w}x{h} as {icns_type} (PNG, {len(data)} bytes) - RGBA{tuple(color[:3])}")
+        
+        icns.add_media(data=data, key=icns_type)
     
     # Write ICNS file
-    icns_path = '/tmp/test_icnsutil.icns'
+    icns_path = 'test_icnsutil.icns'
     icns.write(icns_path)
     
     print(f"\nCreated: {icns_path}")
