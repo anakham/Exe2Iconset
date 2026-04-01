@@ -48,6 +48,49 @@ def pack(data):
     return bytes(ret)
 
 
+def create_rgba_with_mask(img):
+    """Create ARGB data and mask for ICNS.
+    
+    Creates an image with left half opaque and right half transparent.
+    Returns (argb_data, mask_data) for icns.
+    """
+    w, h = img.size
+    pixels = list(img.getdata())
+    
+    # Separate channels: all A, all R, all G, all B (AARRGGBBB order)
+    a_channel = []
+    r_channel = []
+    g_channel = []
+    b_channel = []
+    
+    # Create mask: left half opaque (255), right half transparent (0)
+    for i, (r, g, b, a) in enumerate(pixels):
+        x = i % w
+        if x < w // 2:
+            # Left half: fully opaque
+            a_channel.append(255)
+        else:
+            # Right half: fully transparent
+            a_channel.append(0)
+        r_channel.append(r)
+        g_channel.append(g)
+        b_channel.append(b)
+    
+    # Compress each channel with PackBits
+    a_compressed = pack(a_channel)
+    r_compressed = pack(r_channel)
+    g_compressed = pack(g_channel)
+    b_compressed = pack(b_channel)
+    
+    # ARGB format: header + A + R + G + B
+    argb_data = b'ARGB' + a_compressed + r_compressed + g_compressed + b_compressed
+    
+    # Mask format: just alpha channel compressed
+    mask_data = pack(a_channel)
+    
+    return argb_data, mask_data
+
+
 def create_rgb24_data(img):
     """Create 24-bit RGB data in ICNS format (RRRGGGBBB channel order, PackBits compressed).
     
@@ -85,25 +128,33 @@ def add_icp_blocks(icns_path, icon_sizes, colors):
     with open(icns_path, 'rb') as f:
         data = f.read()
     
-    # icp types for small sizes (use icp4/icp5 with RGB data)
+    # icp types for small sizes - use ARGB format (ic04/ic05) for alpha support
+    # ic04 = 16x16 ARGB, ic05 = 32x32 ARGB
+    # Fall back to icp4/icp5 if ARGB not supported
     icp_types = {
-        (16, 16): b'icp4',
-        (32, 32): b'icp5',
+        (16, 16): b'ic04',  # ARGB
+        (32, 32): b'ic05',  # ARGB
     }
     
-    # Create icp blocks with PackBits compressed 24-bit RGB
+    # Create icp blocks with PackBits compressed ARGB
     icp_blocks = b''
     for (w, h), color in zip(icon_sizes, colors):
         if (w, h) in icp_types:
-            # Create image and encode as PackBits compressed 24-bit RGB
+            # Create image with half transparent/half opaque
             img = Image.new('RGBA', (w, h), color)
-            rgb_data = create_rgb24_data(img)
+            # Create left half opaque, right half transparent
+            for y in range(h):
+                for x in range(w):
+                    if x >= w // 2:
+                        img.putpixel((x, y), (color[0], color[1], color[2], 0))
             
-            # Add block
+            argb_data, mask_data = create_rgba_with_mask(img)
+            
+            # Add block with ARGB format
             block_type = icp_types[(w, h)]
-            block = block_type + struct.pack('>I', len(rgb_data) + 8) + rgb_data
+            block = block_type + struct.pack('>I', len(argb_data) + 8) + argb_data
             icp_blocks += block
-            print(f"Added {block_type.decode()}: {w}x{h}, {len(rgb_data)} bytes (RGB PackBits)")
+            print(f"Added {block_type.decode()}: {w}x{h}, {len(argb_data)} bytes (ARGB with mask)")
     
     if icp_blocks:
         # Parse the ICNS
