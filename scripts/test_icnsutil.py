@@ -10,13 +10,13 @@ import os
 def test_icnsutil():
     """Test icnsutil ICNS creation with different colors."""
     
-    # icp4, icp5 support RGB format (PackBits compressed)
-    # ic07-ic14 are PNG formats
-    # Each type has FIXED display size - we must provide PNG at exactly that size!
+    # ic04, ic05 support ARGB format (with alpha), icp4/icp5 support RGB
+    # Each type has FIXED display size - we must provide at exactly that size!
+    # ic04 = 16x16 ARGB, ic05 = 32x32 ARGB, ic07-ic14 = PNG
     icon_configs = [
-        # Small icons - use RGB format (PackBits compressed)
-        (16, 16, 'icp4', 'rgb'),      # icp4 = 16x16 display
-        (32, 32, 'icp5', 'rgb'),      # icp5 = 32x32 display
+        # Small icons - use ARGB format (ic04/ic05)
+        (16, 16, 'ic04', 'argb'),      # ic04 = 16x16 display
+        (32, 32, 'ic05', 'argb'),      # ic05 = 32x32 display
         # Main icons - use PNG
         (128, 128, 'ic07', 'png'),    # ic07 = 128x128 display
         (256, 256, 'ic08', 'png'),    # ic08 = 256x256 display
@@ -29,8 +29,8 @@ def test_icnsutil():
     
     # Different colors for each icns type
     colors = [
-        (255, 0, 0, 255),       # icp4 (16x16) - Red
-        (0, 255, 0, 255),       # icp5 (32x32) - Green
+        (255, 0, 0, 255),       # ic04 (16x16) - Red
+        (0, 255, 0, 255),       # ic05 (32x32) - Green
         (255, 255, 0, 255),     # ic07 (128x128) - Yellow
         (255, 0, 255, 255),     # ic08 (256x256) - Magenta
         (0, 255, 255, 255),     # ic09 (512x512) - Cyan
@@ -46,11 +46,18 @@ def test_icnsutil():
     for (w, h, icns_type, fmt), color in zip(icon_configs, colors):
         img = Image.new('RGBA', (w, h), color)
         
-        if fmt == 'rgb':
-            # Use ArgbImage for RGB format (PackBits compressed)
+        # Create left half opaque, right half transparent
+        if fmt == 'argb':
+            for y in range(h):
+                for x in range(w):
+                    if x >= w // 2:
+                        img.putpixel((x, y), (color[0], color[1], color[2], 0))
+        
+        if fmt == 'argb':
+            # Use ArgbImage for ARGB format (PackBits compressed with alpha)
             argb_img = ArgbImage(image=img)
-            data = argb_img.rgb_data(compress=True)
-            print(f"Added: {w}x{h} as {icns_type} (RGB, {len(data)} bytes) - RGBA{tuple(color[:3])}")
+            data = argb_img.argb_data(compress=True)
+            print(f"Added: {w}x{h} as {icns_type} (ARGB, {len(data)} bytes) - RGBA{tuple(color[:3])}")
         else:
             # Use PNG format
             buf = io.BytesIO()

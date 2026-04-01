@@ -65,13 +65,13 @@ def create_icns_file(iconset_path, icns_path):
     Uses PNG for main icons (ic07-ic14) and PackBits RGB for small icons (icp4/icp5).
     """
     # Map of icon types (by display size)
-    # Only icp4/icp5 support PackBits RGB, others use PNG
-    # icp4 = 16x16, icp5 = 32x32, ic07 = 128x128, ic08 = 256x256, ic09 = 512x512, ic10 = 1024x1024
+    # ic04/ic05 = ARGB (with alpha), icp4/icp5 = RGB (no alpha)
+    # ic04 = 16x16, ic05 = 32x32, ic07 = 128x128, ic08 = 256x256, ic09 = 512x512, ic10 = 1024x1024
     # ic11 = 32 (16@2x), ic12 = 64 (32@2x), ic13 = 256 (128@2x), ic14 = 512 (256@2x)
     icon_type_map = {
-        (16, 16): b'icp4',    # PackBits RGB
-        (32, 32): b'icp5',    # PackBits RGB
-        (64, 64): b'ic12',    # PNG (no icp6 support in iconutil)
+        (16, 16): b'ic04',    # ARGB (with alpha)
+        (32, 32): b'ic05',    # ARGB (with alpha)
+        (64, 64): b'ic12',    # PNG
         (128, 128): b'ic07',   # PNG
         (256, 256): b'ic08',   # PNG
         (512, 512): b'ic09',   # PNG
@@ -128,28 +128,32 @@ def create_icns_file(iconset_path, icns_path):
         if not icon_type:
             continue
         
-        # For small icons (icp4, icp5), use PackBits RGB instead of PNG
-        if icon_type in [b'icp4', b'icp5']:
+        # For small icons (ic04, ic05), use ARGB format instead of PNG
+        if icon_type in [b'ic04', b'ic05']:
             img = Image.open(filepath)
             if img.mode != 'RGBA':
                 img = img.convert('RGBA')
             
-            # Extract channels and compress with PackBits
+            # Extract channels and compress with PackBits (ARGB format)
             pixels = list(img.getdata())
+            a_channel = []
             r_channel = []
             g_channel = []
             b_channel = []
             
             for r, g, b, a in pixels:
+                a_channel.append(a)
                 r_channel.append(r)
                 g_channel.append(g)
                 b_channel.append(b)
             
+            a_compressed = pack_bits_compress(bytes(a_channel))
             r_compressed = pack_bits_compress(bytes(r_channel))
             g_compressed = pack_bits_compress(bytes(g_channel))
             b_compressed = pack_bits_compress(bytes(b_channel))
             
-            block_data = r_compressed + g_compressed + b_compressed
+            # ARGB format: header + A + R + G + B
+            block_data = b'ARGB' + a_compressed + r_compressed + g_compressed + b_compressed
         else:
             block_data = png_data
         
