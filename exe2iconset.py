@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 import json
 import threading
+import io
 from io import BytesIO
 
 try:
@@ -59,13 +60,18 @@ def pack_bits_compress(data):
     return bytes(ret)
 
 
-def create_icns_file(iconset_path, icns_path):
-    """Create ICNS file from iconset directory.
+def create_icns_from_images(icon_images, icns_path):
+    """Create ICNS file directly from resized images.
     
-    Uses PNG for main icons (ic07-ic14) and PackBits RGB for small icons (icp4/icp5).
+    Args:
+        icon_images: dict of {(width, height): Image.Image} for each target size
+        icns_path: output path for ICNS file
+    
+    Returns:
+        True if successful
     """
     # Map of icon types (by display size)
-    # ic04/ic05 = ARGB (with alpha), icp4/icp5 = RGB (no alpha)
+    # ic04/ic05 = ARGB (with alpha), others = PNG
     # ic04 = 16x16, ic05 = 32x32, ic07 = 128x128, ic08 = 256x256, ic09 = 512x512, ic10 = 1024x1024
     # ic11 = 32 (16@2x), ic12 = 64 (32@2x), ic13 = 256 (128@2x), ic14 = 512 (256@2x)
     icon_type_map = {
@@ -78,63 +84,22 @@ def create_icns_file(iconset_path, icns_path):
         (1024, 1024): b'ic10', # PNG
     }
     
-    retina_type_map = {
-        (16, 16): b'ic11',   # 16@2x: 32 stored, 16 display
-        (32, 32): b'ic12',   # 32@2x: 64 stored, 32 display
-        (128, 128): b'ic13', # 128@2x: 256 stored, 128 display
-        (256, 256): b'ic14', # 256@2x: 512 stored, 256 display
-    }
-    
     blocks = []
     
-    # Read all PNG files from iconset
-    for filename in os.listdir(iconset_path):
-        if not filename.endswith('.png'):
+    # Process icons
+    for (disp_w, disp_h), img in icon_images.items():
+        if not img:
             continue
             
-        filepath = os.path.join(iconset_path, filename)
-        
-        # Parse size from filename (e.g., "icon_128x128.png" or "icon_128x128@2x.png")
-        name = filename[:-4]  # remove .png
-        
-        is_retina = '@2x' in name
-        name_parts = name.replace('@2x', '').split('x')
-        
-        if len(name_parts) != 2:
-            continue
-            
-        try:
-            width = int(name_parts[0])
-            height = int(name_parts[1])
-        except ValueError:
-            continue
-        
-        # Read PNG data
-        with open(filepath, 'rb') as f:
-            png_data = f.read()
-        
-        # Determine icon type
-        if is_retina:
-            # For retina: stored size is 2x the display size
-            # icon_128x128@2x.png = 256x256 stored, 128x128 display -> ic13
-            actual_width = width * 2
-            actual_height = height * 2
-            icon_type = retina_type_map.get((width, height))
-        else:
-            actual_width = width
-            actual_height = height
-            icon_type = icon_type_map.get((width, height))
-        
+        icon_type = icon_type_map.get((disp_w, disp_h))
         if not icon_type:
             continue
         
-        # For small icons (ic04, ic05), use ARGB format instead of PNG
+        # For small icons (ic04, ic05), use ARGB format
         if icon_type in [b'ic04', b'ic05']:
-            img = Image.open(filepath)
             if img.mode != 'RGBA':
                 img = img.convert('RGBA')
             
-            # Extract channels and compress with PackBits (ARGB format)
             pixels = list(img.getdata())
             a_channel = []
             r_channel = []
@@ -152,29 +117,27 @@ def create_icns_file(iconset_path, icns_path):
             g_compressed = pack_bits_compress(bytes(g_channel))
             b_compressed = pack_bits_compress(bytes(b_channel))
             
-            # ARGB format: header + A + R + G + B
             block_data = b'ARGB' + a_compressed + r_compressed + g_compressed + b_compressed
         else:
-            block_data = png_data
+            # PNG for other sizes
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            block_data = buf.getvalue()
         
-        # Create block header
         block = icon_type + struct.pack('>I', len(block_data) + 8) + block_data
         blocks.append((icon_type, block))
     
     if not blocks:
         return False
     
-    # Sort blocks by type (icp types first, then ic0* types)
+    # Sort blocks by type
     blocks.sort(key=lambda x: x[0])
     
     # Build ICNS file
     blocks_data = b''.join(block for _, block in blocks)
-    
-    # ICNS header
     total_size = 8 + len(blocks_data)
     icns_data = b'icns' + struct.pack('>I', total_size) + blocks_data
     
-    # Write to file
     with open(icns_path, 'wb') as f:
         f.write(icns_data)
     
@@ -638,7 +601,9 @@ class IconExtractorApp:
             
             self.log_status(f"Processing {len(icon_sizes)} icons...")
             
-            created_files = []
+            # Build icon images directly for ICNS
+            regular_icons = {}  # {(width, height): Image}
+            
             for target_w, target_h in mac_icon_sizes:
                 best_source = None
                 best_diff = float('inf')
@@ -654,47 +619,37 @@ class IconExtractorApp:
                     src_img = src_img.copy()
                     
                     try:
+                        # Resize to target size
                         resized = src_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-                        
-                        regular_name = f"icon_{target_w}x{target_h}.png"
-                        regular_path = os.path.join(iconset_path, regular_name)
-                        resized.save(regular_path, 'PNG')
-                        created_files.append(regular_path)
-                        
-                        retina_name = f"icon_{target_w//2}x{target_h//2}@2x.png"
-                        retina_path = os.path.join(iconset_path, retina_name)
-                        
-                        if src_w >= target_w and src_h >= target_h:
-                            retina_img = resized
-                            retina_img.save(retina_path, 'PNG')
-                            created_files.append(retina_path)
-                    
+                        regular_icons[(target_w, target_h)] = resized
                     except Exception as e:
                         self.log_status(f"Error processing icon: {str(e)}")
             
-            self.log_status(f"Created {len(created_files)} PNG files in iconset.")
+            self.log_status(f"Created {len(regular_icons)} icon sizes for ICNS.")
             
-            # Create ICNS file using custom implementation with proper icon types
+            # Create ICNS file directly from images
             icns_path = os.path.join(output_dir, self.output_name.get() + ".icns")
             
             try:
-                if create_icns_file(iconset_path, icns_path):
+                if create_icns_from_images(regular_icons, icns_path):
                     self.log_status(f"Successfully created ICNS file: {icns_path}")
                     
-                    # Optionally clean up iconset directory
+                    # Optionally create iconset directory for debugging
                     response = messagebox.askyesno("Success", 
                         f"ICNS file created successfully!\n\n"
                         f"Location: {icns_path}\n\n"
-                        f"Keep the iconset directory for future modifications?")
+                        f"Also save iconset directory for inspection?")
                     
-                    if not response:
-                        shutil.rmtree(iconset_path)
+                    if response:
+                        # Save iconset for inspection
+                        os.makedirs(iconset_path, exist_ok=True)
+                        for (w, h), img in regular_icons.items():
+                            img.save(os.path.join(iconset_path, f"icon_{w}x{h}.png"), 'PNG')
+                        self.log_status(f"Saved iconset in: {iconset_path}")
                 else:
                     self.log_status(f"Failed to create ICNS")
-                    self.log_status(f"PNG files saved in: {iconset_path}")
             except Exception as e:
                 self.log_status(f"Failed to create ICNS: {str(e)}")
-                self.log_status(f"PNG files saved in: {iconset_path}")
             
             # Open output directory
             if sys.platform == 'win32':
