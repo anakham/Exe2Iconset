@@ -10,12 +10,139 @@ import shutil
 from pathlib import Path
 import json
 import threading
+import io
 from io import BytesIO
 
 try:
     import pefile
 except ImportError:
     pefile = None
+
+
+# PackBits compression for ICNS small icons (icp4/icp5)
+def pack_bits_compress(data):
+    """PackBits compression for bytes."""
+    ret = []
+    buf = []
+    i = 0
+
+    def flush_buf():
+        if len(buf) > 0:
+            ret.append(len(buf) - 1)
+            ret.extend(buf)
+            buf.clear()
+
+    end = len(data)
+    while i < end:
+        arr = data[i:i + 3]
+        x = arr[0]
+        if len(arr) == 3 and x == arr[1] and x == arr[2]:
+            flush_buf()
+            c = 3
+            while (i + c) < end and data[i + c] == x:
+                c += 1
+            i += c
+            while c > 130:
+                ret.append(0xFF)
+                ret.append(x)
+                c -= 130
+            if c > 2:
+                ret.append(c + 0x7D)
+                ret.append(x)
+            else:
+                i -= c
+        else:
+            buf.append(x)
+            if len(buf) > 127:
+                flush_buf()
+            i += 1
+    flush_buf()
+    return bytes(ret)
+
+
+ICON_TYPE_MAP = {
+    (16, 16): (b'ic04', 'ARGB'),
+    (32, 32): (b'ic05', 'ARGB'),
+    (48, 48): (b'icp6', 'PNG'),
+    (64, 64): (b'ic12', 'PNG'),
+    (128, 128): (b'ic07', 'PNG'),
+    (256, 256): (b'ic08', 'PNG'),
+    (512, 512): (b'ic09', 'PNG'),
+    (1024, 1024): (b'ic10', 'PNG'),
+}
+
+
+def create_icns_from_images(icon_images, icns_path):
+    """Create ICNS file directly from resized images.
+    
+    Args:
+        icon_images: dict of {(width, height): Image.Image} for each target size
+        icns_path: output path for ICNS file
+    
+    Returns:
+        True if successful
+    """
+    
+    blocks = []
+    
+    # Process icons
+    for (disp_w, disp_h), img in icon_images.items():
+        if not img:
+            continue
+        
+        icon_info = ICON_TYPE_MAP.get((disp_w, disp_h))
+        if not icon_info:
+            continue
+        
+        icon_type, icon_format = icon_info
+        
+        # For ARGB format icons, use PackBits compression
+        if icon_format == 'ARGB':
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            
+            pixels = list(img.getdata())
+            a_channel = []
+            r_channel = []
+            g_channel = []
+            b_channel = []
+            
+            for r, g, b, a in pixels:
+                a_channel.append(a)
+                r_channel.append(r)
+                g_channel.append(g)
+                b_channel.append(b)
+            
+            a_compressed = pack_bits_compress(bytes(a_channel))
+            r_compressed = pack_bits_compress(bytes(r_channel))
+            g_compressed = pack_bits_compress(bytes(g_channel))
+            b_compressed = pack_bits_compress(bytes(b_channel))
+            
+            block_data = b'ARGB' + a_compressed + r_compressed + g_compressed + b_compressed
+        else:
+            # PNG for other sizes
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            block_data = buf.getvalue()
+        
+        block = icon_type + struct.pack('>I', len(block_data) + 8) + block_data
+        blocks.append((icon_type, block))
+    
+    if not blocks:
+        return False
+    
+    # Sort blocks by type
+    blocks.sort(key=lambda x: x[0])
+    
+    # Build ICNS file
+    blocks_data = b''.join(block for _, block in blocks)
+    total_size = 8 + len(blocks_data)
+    icns_data = b'icns' + struct.pack('>I', total_size) + blocks_data
+    
+    with open(icns_path, 'wb') as f:
+        f.write(icns_data)
+    
+    return True
 
 class IconExtractorApp:
     def __init__(self, root):
@@ -130,16 +257,7 @@ class IconExtractorApp:
         if pefile is None:
             missing_tools.append("pefile (Python package)")
 
-        # Check for iconutil (macOS) - we'll use alternative if not available
-        self.iconutil_available = False
-        if sys.platform == 'darwin':
-            try:
-                subprocess.run(['iconutil', '--help'], capture_output=True)
-                self.iconutil_available = True
-            except FileNotFoundError:
-                self.log_status("Note: iconutil not found, will use PNG conversion only")
-        
-        # Check for PIL
+        # Check for PIL (used for ICNS creation - cross-platform)
         try:
             Image.__version__
         except:
@@ -466,10 +584,7 @@ class IconExtractorApp:
             
             os.makedirs(iconset_path)
             
-            mac_icon_sizes = [
-                (16, 16), (32, 32), (64, 64), (128, 128),
-                (256, 256), (512, 512), (1024, 1024)
-            ]
+            mac_icon_sizes = list(ICON_TYPE_MAP.keys())
             
             icon_sizes = []
             for icon_entry in icon_data_list:
@@ -484,7 +599,9 @@ class IconExtractorApp:
             
             self.log_status(f"Processing {len(icon_sizes)} icons...")
             
-            created_files = []
+            # Build icon images directly for ICNS
+            regular_icons = {}  # {(width, height): Image}
+            
             for target_w, target_h in mac_icon_sizes:
                 best_source = None
                 best_diff = float('inf')
@@ -500,64 +617,37 @@ class IconExtractorApp:
                     src_img = src_img.copy()
                     
                     try:
+                        # Resize to target size
                         resized = src_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-                        
-                        regular_name = f"icon_{target_w}x{target_h}.png"
-                        regular_path = os.path.join(iconset_path, regular_name)
-                        resized.save(regular_path, 'PNG')
-                        created_files.append(regular_path)
-                        
-                        retina_name = f"icon_{target_w//2}x{target_h//2}@2x.png"
-                        retina_path = os.path.join(iconset_path, retina_name)
-                        
-                        if src_w >= target_w and src_h >= target_h:
-                            retina_img = resized
-                            retina_img.save(retina_path, 'PNG')
-                            created_files.append(retina_path)
-                    
+                        regular_icons[(target_w, target_h)] = resized
                     except Exception as e:
                         self.log_status(f"Error processing icon: {str(e)}")
             
-            self.log_status(f"Created {len(created_files)} PNG files in iconset.")
+            self.log_status(f"Created {len(regular_icons)} icon sizes for ICNS.")
             
-            # Create ICNS file if iconutil is available
+            # Create ICNS file directly from images
             icns_path = os.path.join(output_dir, self.output_name.get() + ".icns")
             
-            if self.iconutil_available and sys.platform == 'darwin':
-                # Use macOS iconutil to create ICNS
-                cmd = ['iconutil', '-c', 'icns', iconset_path, '-o', icns_path]
-                
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                
-                if result.returncode == 0:
+            try:
+                if create_icns_from_images(regular_icons, icns_path):
                     self.log_status(f"Successfully created ICNS file: {icns_path}")
                     
-                    # Optionally clean up iconset directory
+                    # Optionally create iconset directory for debugging
                     response = messagebox.askyesno("Success", 
                         f"ICNS file created successfully!\n\n"
                         f"Location: {icns_path}\n\n"
-                        f"Keep the iconset directory for future modifications?")
+                        f"Also save iconset directory for inspection?")
                     
-                    if not response:
-                        shutil.rmtree(iconset_path)
+                    if response:
+                        # Save iconset for inspection
+                        os.makedirs(iconset_path, exist_ok=True)
+                        for (w, h), img in regular_icons.items():
+                            img.save(os.path.join(iconset_path, f"icon_{w}x{h}.png"), 'PNG')
+                        self.log_status(f"Saved iconset in: {iconset_path}")
                 else:
-                    self.log_status(f"iconutil failed: {result.stderr}")
-                    self.log_status(f"PNG files saved in: {iconset_path}")
-            else:
-                # For Windows or without iconutil, just save the PNGs
-                self.log_status(f"PNG iconset created at: {iconset_path}")
-                self.log_status("Note: On macOS, use 'iconutil -c icns <iconset>' to create ICNS")
-                
-                # Create a simple batch script for macOS users
-                if sys.platform != 'darwin':
-                    script_path = os.path.join(output_dir, "create_icns_mac.command")
-                    with open(script_path, 'w') as f:
-                        f.write("#!/bin/bash\n")
-                        f.write(f'iconutil -c icns "{iconset_name}"\n')
-                        f.write('echo "ICNS file created!"\n')
-                    
-                    os.chmod(script_path, 0o755)
-                    self.log_status(f"Created macOS conversion script: {script_path}")
+                    self.log_status(f"Failed to create ICNS")
+            except Exception as e:
+                self.log_status(f"Failed to create ICNS: {str(e)}")
             
             # Open output directory
             if sys.platform == 'win32':
