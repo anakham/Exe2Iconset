@@ -60,6 +60,18 @@ def pack_bits_compress(data):
     return bytes(ret)
 
 
+ICON_TYPE_MAP = {
+    (16, 16): (b'ic04', 'ARGB'),
+    (32, 32): (b'ic05', 'ARGB'),
+    (48, 48): (b'icp6', 'PNG'),
+    (64, 64): (b'ic12', 'PNG'),   # 32@2x: 64 stored, 32 display
+    (128, 128): (b'ic07', 'PNG'),
+    (256, 256): (b'ic08', 'PNG'),
+    (512, 512): (b'ic09', 'PNG'),
+    (1024, 1024): (b'ic10', 'PNG'),
+}
+
+
 def create_icns_from_images(icon_images, icns_path):
     """Create ICNS file directly from resized images.
     
@@ -70,19 +82,6 @@ def create_icns_from_images(icon_images, icns_path):
     Returns:
         True if successful
     """
-    # Map of icon types (by display size)
-    # ic04/ic05 = ARGB (with alpha), others = PNG
-    # ic04 = 16x16, ic05 = 32x32, ic07 = 128x128, ic08 = 256x256, ic09 = 512x512, ic10 = 1024x1024
-    # ic11 = 32 (16@2x), ic12 = 64 (32@2x), ic13 = 256 (128@2x), ic14 = 512 (256@2x)
-    icon_type_map = {
-        (16, 16): b'ic04',    # ARGB (with alpha)
-        (32, 32): b'ic05',    # ARGB (with alpha)
-        (64, 64): b'ic12',    # PNG
-        (128, 128): b'ic07',   # PNG
-        (256, 256): b'ic08',   # PNG
-        (512, 512): b'ic09',   # PNG
-        (1024, 1024): b'ic10', # PNG
-    }
     
     blocks = []
     
@@ -90,13 +89,15 @@ def create_icns_from_images(icon_images, icns_path):
     for (disp_w, disp_h), img in icon_images.items():
         if not img:
             continue
-            
-        icon_type = icon_type_map.get((disp_w, disp_h))
-        if not icon_type:
+        
+        icon_info = ICON_TYPE_MAP.get((disp_w, disp_h))
+        if not icon_info:
             continue
         
-        # For small icons (ic04, ic05), use ARGB format
-        if icon_type in [b'ic04', b'ic05']:
+        icon_type, icon_format = icon_info
+        
+        # For ARGB format icons, use PackBits compression
+        if icon_format == 'ARGB':
             if img.mode != 'RGBA':
                 img = img.convert('RGBA')
             
@@ -583,10 +584,7 @@ class IconExtractorApp:
             
             os.makedirs(iconset_path)
             
-            mac_icon_sizes = [
-                (16, 16), (32, 32), (64, 64), (128, 128),
-                (256, 256), (512, 512), (1024, 1024)
-            ]
+            mac_icon_sizes = list(ICON_TYPE_MAP.keys())
             
             icon_sizes = []
             for icon_entry in icon_data_list:
