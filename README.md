@@ -94,14 +94,7 @@ For details on ICNS format, see:
 
 ## Testing
 
-Run tests:
-```bash
-PYTHONPATH=. python tests/test_icns.py
-PYTHONPATH=. python tests/test_extract.py
-PYTHONPATH=. python tests/test_convert.py
-```
-
-Or with pytest:
+Run tests with pytest:
 ```bash
 pip install pytest
 PYTHONPATH=. pytest tests/
