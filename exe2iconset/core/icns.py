@@ -80,7 +80,7 @@ def create_icns_from_images(icon_images, icns_path):
             if img.mode != 'RGBA':
                 img = img.convert('RGBA')
             
-            pixels = list(img.getdata())
+            pixels = list(img.get_flattened_data())
             a_channel = []
             r_channel = []
             g_channel = []
