@@ -6,6 +6,7 @@ from exe2iconset.core.convert import (
     convert_icons_to_icns_sizes,
     save_iconset,
 )
+from exe2iconset import ICON_TYPE_MAP
 
 
 def test_convert_icons_to_icns_sizes(sample_icon_list):
@@ -28,8 +29,7 @@ def test_convert_icons_empty_list():
 def test_convert_icons_all_sizes(sample_image):
     """Test conversion to all ICNS sizes."""
     icon_data = [{'width': 512, 'height': 512, 'image': sample_image}]
-    mac_icon_sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), 
-                      (256, 256), (512, 512), (1024, 1024)]
+    mac_icon_sizes = list(ICON_TYPE_MAP.keys())
     
     result = convert_icons_to_icns_sizes(icon_data, mac_icon_sizes)
     
