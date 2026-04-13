@@ -49,7 +49,8 @@ Detailed description of these stages presented in next paragraphs.
 ### Issue Triage
 
 1. **Task Assignment**. Human selects issue to solve from projects issue. AI agent helps with projects unresolved issue representation if needed. After Issue is selected for developement. If milestone and project issue links not set, AI agents sets them eigher. Commands to be used for:
-    - issue list: <command_placeholder>
+    - issue list: `gh issue list --json number,state,title | jq -r '.[] | "\(.number)\t\(.state)\t\(.title)"'`
+    - issue details: `gh issue view N --json number,title,body,state,milestone,assignees,author --jq '"number: \(.number)\ntitle: \(.title)\nstate: \(.state)\nmilestone: \(.milestone.title)\nassignee: \(.assignees[].login // "unassigned")\nauthor: \(.author.login)\n\n\(.body)"'`
     - project and milestone setting: <command_placeholder>
 2. **Task Planing**. If scope of issue is large then it could be divided into subissues. After creating subissues return to 1. Commands for:
     - issue creation: <command_placeholder>
