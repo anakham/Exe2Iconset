@@ -50,13 +50,15 @@ Detailed description of these stages presented in next paragraphs.
 
 1. **Task Assignment**. Human selects issue to solve from projects issue. AI agent helps with projects unresolved issue representation if needed. After Issue is selected for developement. If milestone and project issue links not set, AI agents sets them eigher. Commands to be used for:
     - issue list: `gh issue list --json number,state,title | jq -r '.[] | "\(.number)\t\(.state)\t\(.title)"'`
-    - issue details: `gh issue view N --json number,title,body,state,milestone,assignees,author --jq '"number: \(.number)\ntitle: \(.title)\nstate: \(.state)\nmilestone: \(.milestone.title)\nassignee: \(.assignees[].login // "unassigned")\nauthor: \(.author.login)\n\n\(.body)"'`
-    - project and milestone setting: <command_placeholder>
+    - issue details: `gh issue view N --json number,title,body,state,milestone,assignees,author,projectItems --jq '"number: \(.number)\ntitle: \(.title)\nstate: \(.state)\nmilestone: \(.milestone.title)\nassignee: \(.assignees[].login // "unassigned")\nauthor: \(.author.login)\nproject: \(.projectItems[].title // "none")\n\n\(.body)"'`
+    - projects list: `gh project list --owner USERNAME` where USERNAME in the scope of this project is anakham.
+    - project setting: `gh api graphql -f query='mutation { addProjectV2ItemById(input: { projectId: "PROJECT_ID", contentId: "ISSUE_NODE_ID" }) { clientMutationId } }'` where PROJECT_ID from `gh project list --owner USERNAME` and ISSUE_NODE_ID from `gh issue view N --json id`
+    - milestone setting: `gh issue edit N --milestone "MilestoneName"`
 2. **Task Planing**. If scope of issue is large then it could be divided into subissues. After creating subissues return to 1. Commands for:
-    - issue creation: <command_placeholder>
+    - issue creation: `gh issue create --title "Title" --body "Description" [--milestone "MilestoneName"] [--label "label"] [--assignee @me]` (Note: project setting must be done separately after creation via project/milestone setting command)
     - setting sub-issue relationship: <command_placeholder>
 3. **Start implementation**. AI agent sets issue assignee (human or himself). Proceed to **Code Development**. Command for:
-    - assignee setting: <command_placeholder>
+    - assignee setting: `gh issue edit N --add-assignee @me` or `gh issue edit N --add-assignee USERNAME`
 
 ### Code Development
 
