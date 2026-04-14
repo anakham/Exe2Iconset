@@ -48,7 +48,7 @@ Detailed description of these stages is presented in the next paragraphs.
 
 ### Issue Triage
 
-1. **Task Assignment**. Human selects issue to solve from projects issue. AI agent helps with projects unresolved issue representation if needed. After Issue is selected for developement. If milestone and project issue links not set, AI agents sets them eigher. Commands to be used for:
+1. **Task Assignment**. Human selects issue to solve from project's issue. AI agent helps with project's unresolved issue representation if needed. After issue is selected for development. If milestone and project issue links not set, AI agent sets them either. Commands to be used for:
     - issue list: `gh issue list --json number,state,title | jq -r '.[] | "\(.number)\t\(.state)\t\(.title)"'`
     - issue details: `gh issue view N --json number,title,body,state,milestone,assignees,author,projectItems --jq '"number: \(.number)\ntitle: \(.title)\nstate: \(.state)\nmilestone: \(.milestone.title)\nassignee: \(.assignees[].login // "unassigned")\nauthor: \(.author.login)\nproject: \(.projectItems[].title // "none")\n\n\(.body)"'`
     - projects list: `gh project list --owner USERNAME` where USERNAME in the scope of this project is anakham.
@@ -63,7 +63,7 @@ Detailed description of these stages is presented in the next paragraphs.
 ### Code Development
 
 4. **Implementation**. Assignee makes changes or experiments locally
-5. **Create Branch**. Create developement branch if code changes are required else proceed to **Issue Closing** stage. Command for:
+5. **Create Branch**. Create development branch if code changes are required else proceed to **Issue Closing** stage. Command for:
     - branch creation: `git checkout -b [feature|bug]/issue-<issue_number>-<concise-branch-name>`, format of branch name: `[feature|bug]/issue-<issue_number>-<concise-branch-name>`
 6. **Run Tests**. Command for:
     - running tests: `PYTHONPATH=. pytest tests/`
@@ -80,7 +80,7 @@ Detailed description of these stages is presented in the next paragraphs.
 
 ### Code Review
 
-11. **PR Creation**. After first push on current issue branch, pull request should be created. It should be linked to project, it's milestone. Assignee should be set to account affiliated with AI agent or human. Reviewer also should be set. It is also to point out which issue cuurent pr is closing by adding finish line "Closes #<issue number>" in pr body description. Commands for:
+11. **PR Creation**. After first push on current issue branch, pull request should be created. It should be linked to project, its milestone. Assignee should be set to account affiliated with AI agent or human. Reviewer also should be set. It is also to point out which issue current PR is closing by adding closing line "Closes #<issue number>" in PR body description. Commands for:
     - pull request creation: `gh pr create --title "Title" --body "Description" --base main --head branch-name` (Note: add "Closes #N" in body to close issue)
     - link pull request to project: `gh api graphql -f query='mutation { addProjectV2ItemById(input: { projectId: "PROJECT_ID", contentId: "PR_NODE_ID" }) { clientMutationId } }'` where PROJECT_ID from `gh project list --owner USERNAME` and PR_NODE_ID from `gh pr view N --json id`
     - set pull request milestone: `gh api graphql -f query='mutation { updatePullRequest(input: { pullRequestId: "PR_NODE_ID", milestoneId: "MILESTONE_NODE_ID" }) { clientMutationId } }'` where MILESTONE_NODE_ID from `gh api repos/OWNER/REPO/milestones/N --jq '.node_id'`
@@ -88,14 +88,14 @@ Detailed description of these stages is presented in the next paragraphs.
     - set pull request reviewer: `gh api graphql -f query='mutation { requestReviews(input: { pullRequestId: "PR_NODE_ID", userIds: ["USER_ID"] }) { clientMutationId } }'` where USER_ID from `gh api graphql -f query='{user(login: "USERNAME") { id } }'` (Note: PR creator cannot be a reviewer - use a different account)
 12. **PR Remarks**. Reviewer makes remarks and places them at the corespondent lines of code. If reviewer is AI agent then command for:
     - place first level comments in PR: `gh api repos/OWNER/REPO/pulls/N/comments -X POST -F body="Comment" -F commit_id=COMMIT_SHA -F path=FILENAME -F line=LINE -F side=RIGHT`
-14. **PR Resolve Remarks**. Assignee reads remarks and for all of unresolved eigher prepare neccesary code changes (going back to **Code Development** stage) or if solving problems pointed by reviewer is hard and requires massive changes of code then new issue should be created for that by assignee. Weather it is the case, human should decide and confirm issue creation. In case issue is created, it's link should be place in the reply to the source replye comment. In case of code changes small reply to reviewer comment with fix summary should be placed. Commands for:
+14. **PR Resolve Remarks**. Assignee reads remarks and for all of unresolved either prepares necessary code changes (going back to **Code Development** stage) or if solving problems pointed by reviewer is hard and requires massive changes of code then new issue should be created for that by assignee. Whether it is the case, human should decide and confirm issue creation. In case issue is created, its link should be placed in the reply to the source reply comment. In case of code changes, small reply to reviewer comment with fix summary should be placed. Commands for:
     - get list of all unresolved remarks: `gh api graphql -f query='{repository(owner: "OWNER", name: "REPO") { pullRequest(number: N) { reviewThreads(first: 20) { nodes { id isResolved comments(first: 1) { nodes { path line body } } } } } } }' | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | if .isResolved == false then "[\(.id)] \(.comments.nodes[0].path // "general"):\(.comments.nodes[0].line // "?") - \(.comments.nodes[0].body[:50])..." else empty end'`
     - new issue creation: `gh issue create --title "Title" --body "Description" [--milestone "MilestoneName"] [--label "label"] [--assignee @me]` (Note: If issue created, link it in reply using thread ID)
     - commentary as reply to pr comment: `gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Your reply"`
-14. **PR Confirm Remarks Fix**. Reviewer checks solutions for remarks, and either mark them as resolved, or reply with reason, why it consider it unresolved. Also reviewer may add some new remarks. After that **Code Review** stage repeats from begining until all remarks are resolved. Commands for:
+14. **PR Confirm Remarks Fix**. Reviewer checks solutions for remarks, and either marks them as resolved, or replies with reason why they consider it unresolved. Also reviewer may add some new remarks. After that **Code Review** stage repeats from beginning until all remarks are resolved. Commands for:
     - setting resolved commentary mark (if reviewer is AI agent): `gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THREAD_ID" }) { clientMutationId } }'` where THREAD_ID from GraphQL query
     - adding comment as reply to comment: `gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Your reply"`
-15. **PR Closure**. PR can be closed only if it has no unresolved reviewer remarks and human directly approved it is done. Comment describing whole developement process of this pull request may be added. Approved pull request should be merged to main branch with squach commits strategy. Commands for:
+15. **PR Closure**. PR can be closed only if it has no unresolved reviewer remarks and human directly approved it is done. Comment describing whole development process of this pull request may be added. Approved pull request should be merged to main branch with squash commits strategy. Commands for:
     - check for unresolved remarks: `gh api graphql -f query='{repository(owner: "OWNER", name: "REPO") { pullRequest(number: N) { reviewThreads(first: 20) { nodes { id isResolved comments(first: 1) { nodes { path line body } } } } } } }' | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | if .isResolved == false then "[\(.id)] \(.comments.nodes[0].path // "general"):\(.comments.nodes[0].line // "?") - \(.comments.nodes[0].body[:50])..." else empty end'` (should return empty)
     - adding comment to pr not assigned to code: `gh pr comment N --body "Comment text"`
     - merge pull request with squash commit strategy: `gh pr merge N --squash --delete-branch`
@@ -104,7 +104,7 @@ Detailed description of these stages is presented in the next paragraphs.
 
 16. **Issue Close**. If issue is not closed by PR closing, close it. Command for:
     - set close issue state: `gh issue close N`
-17. **Save AI development logs**. This step is optional. Human saves session logs from time to time as markdown files to `sessions/issue<#issue>/` folder. Files may overlap (every next file may contain at the begining portion of the end of previous file). Compaction may take place. First lines of first files may relate to other issue. AI agent should create one summary file in the format `YEAR-MONTH-DAY_session_<file_index>_issue_<issue_number>_<short_session_description>.md` in the `sessions/` directory (not in issue-specific subfolder). This file should NOT be committed to the repo - placed to project as gist and link to that gist should be attached to issue comment. Commands for:
+17. **Save AI development logs**. This step is optional. Human saves session logs from time to time as markdown files to `sessions/issue<#issue>/` folder. Files may overlap (every next file may contain at the beginning portion of the end of previous file). Compaction may take place. First lines of first files may relate to other issue. AI agent should create one summary file in the format `YEAR-MONTH-DAY_session_<file_index>_issue_<issue_number>_<short_session_description>.md` in the `sessions/` directory (not in issue-specific subfolder). This file should NOT be committed to the repo - placed to project as gist and link to that gist should be attached to issue comment. Commands for:
     - gist placement: `gh gist create --filename "FILENAME.md" --description "Session logs for issue #N" FILEPATH`
     - adding gist link to issue comment: `gh issue comment N --body "Session logs: https://gist.github.com/GIST_ID"`
 
