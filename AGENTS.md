@@ -56,7 +56,7 @@ Detailed description of these stages presented in next paragraphs.
     - milestone setting: `gh issue edit N --milestone "MilestoneName"`
 2. **Task Planing**. If scope of issue is large then it could be divided into subissues. After creating subissues return to 1. Commands for:
     - issue creation: `gh issue create --title "Title" --body "Description" [--milestone "MilestoneName"] [--label "label"] [--assignee @me]` (Note: project setting must be done separately after creation via project/milestone setting command)
-    - setting sub-issue relationship: <command_placeholder>
+    - setting sub-issue relationship: `gh api graphql -f query='mutation { addSubIssue(input: { issueId: "PARENT_ISSUE_ID", subIssueId: "SUB_ISSUE_ID" }) { subIssue { id number title } } }'` where PARENT_ISSUE_ID from `gh issue view N --json id` and SUB_ISSUE_ID from `gh issue view M --json id`
 3. **Start implementation**. AI agent sets issue assignee (human or himself). Proceed to **Code Development**. Command for:
     - assignee setting: `gh issue edit N --add-assignee @me` or `gh issue edit N --add-assignee USERNAME`
 
