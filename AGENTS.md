@@ -50,13 +50,15 @@ Detailed description of these stages presented in next paragraphs.
 
 1. **Task Assignment**. Human selects issue to solve from projects issue. AI agent helps with projects unresolved issue representation if needed. After Issue is selected for developement. If milestone and project issue links not set, AI agents sets them eigher. Commands to be used for:
     - issue list: `gh issue list --json number,state,title | jq -r '.[] | "\(.number)\t\(.state)\t\(.title)"'`
-    - issue details: `gh issue view N --json number,title,body,state,milestone,assignees,author --jq '"number: \(.number)\ntitle: \(.title)\nstate: \(.state)\nmilestone: \(.milestone.title)\nassignee: \(.assignees[].login // "unassigned")\nauthor: \(.author.login)\n\n\(.body)"'`
-    - project and milestone setting: <command_placeholder>
+    - issue details: `gh issue view N --json number,title,body,state,milestone,assignees,author,projectItems --jq '"number: \(.number)\ntitle: \(.title)\nstate: \(.state)\nmilestone: \(.milestone.title)\nassignee: \(.assignees[].login // "unassigned")\nauthor: \(.author.login)\nproject: \(.projectItems[].title // "none")\n\n\(.body)"'`
+    - projects list: `gh project list --owner USERNAME` where USERNAME in the scope of this project is anakham.
+    - project setting: `gh api graphql -f query='mutation { addProjectV2ItemById(input: { projectId: "PROJECT_ID", contentId: "ISSUE_NODE_ID" }) { clientMutationId } }'` where PROJECT_ID from `gh project list --owner USERNAME` and ISSUE_NODE_ID from `gh issue view N --json id`
+    - milestone setting: `gh issue edit N --milestone "MilestoneName"`
 2. **Task Planing**. If scope of issue is large then it could be divided into subissues. After creating subissues return to 1. Commands for:
-    - issue creation: <command_placeholder>
-    - setting sub-issue relationship: <command_placeholder>
+    - issue creation: `gh issue create --title "Title" --body "Description" [--milestone "MilestoneName"] [--label "label"] [--assignee @me]` (Note: project setting must be done separately after creation via project/milestone setting command)
+    - setting sub-issue relationship: `gh api graphql -f query='mutation { addSubIssue(input: { issueId: "PARENT_ISSUE_ID", subIssueId: "SUB_ISSUE_ID" }) { subIssue { id number title } } }'` where PARENT_ISSUE_ID from `gh issue view N --json id` and SUB_ISSUE_ID from `gh issue view M --json id`
 3. **Start implementation**. AI agent sets issue assignee (human or himself). Proceed to **Code Development**. Command for:
-    - assignee setting: <command_placeholder>
+    - assignee setting: `gh issue edit N --add-assignee @me` or `gh issue edit N --add-assignee USERNAME`
 
 ### Code Development
 
@@ -78,22 +80,25 @@ Detailed description of these stages presented in next paragraphs.
 ### Code Review
 
 11. **PR Creation**. After first push on current issue branch, pull request should be created. It should be linked to project, it's milestone. Assignee should be set to account affiliated with AI agent or human. Reviewer also should be set. It is also to point out which issue cuurent pr is closing by adding finish line "Closes #<issue number>" in pr body description. Commands for:
-    - pull request creation: <command_placeholder>
-    - link pull request to project and milestone: <command_placeholder>
-    - set pull request assignee and reviewer: <command_placeholder>
+    - pull request creation: `gh pr create --title "Title" --body "Description" --base main --head branch-name` (Note: add "Closes #N" in body to close issue)
+    - link pull request to project: `gh api graphql -f query='mutation { addProjectV2ItemById(input: { projectId: "PROJECT_ID", contentId: "PR_NODE_ID" }) { clientMutationId } }'` where PROJECT_ID from `gh project list --owner USERNAME` and PR_NODE_ID from `gh pr view N --json id`
+    - set pull request milestone: `gh api graphql -f query='mutation { updatePullRequest(input: { pullRequestId: "PR_NODE_ID", milestoneId: "MILESTONE_NODE_ID" }) { clientMutationId } }'` where MILESTONE_NODE_ID from `gh api repos/OWNER/REPO/milestones/N --jq '.node_id'`
+    - set pull request assignee: `gh api graphql -f query='mutation { addAssigneesToAssignable(input: { assignableId: "PR_NODE_ID", assigneeIds: ["USER_ID"] }) { clientMutationId } }'` where USER_ID from `gh api graphql -f query='{user(login: "USERNAME") { id } }'`
+    - set pull request reviewer: `gh api graphql -f query='mutation { requestReviews(input: { pullRequestId: "PR_NODE_ID", userIds: ["USER_ID"] }) { clientMutationId } }'` where USER_ID from `gh api graphql -f query='{user(login: "USERNAME") { id } }'` (Note: PR creator cannot be a reviewer - use a different account)
 12. **PR Remarks**. Reviewer makes remarks and places them at the corespondent lines of code. If reviewer is AI agent then command for:
-    - place first level comments in PR:
+    - place first level comments in PR: `gh api repos/OWNER/REPO/pulls/N/comments -X POST -F body="Comment" -F commit_id=COMMIT_SHA -F path=FILENAME -F line=LINE -F side=RIGHT`
 13. **PR Create Issue**.  
 14. **PR Resolve Remarks**. Assignee reads remarks and for all of unresolved eigher prepare neccesary code changes (going back to **Code Development** stage) or if solving problems pointed by reviewer is hard and requires massive changes of code then new issue should be created for that by assignee. Weather it is the case, human should decide and confirm issue creation. In case issue is created, it's link should be place in the reply to the source replye comment. In case of code changes small reply to reviewer comment with fix summary should be placed. Commands for:
-    - get list of all unresolved remarks: <command_placeholder>
-    - new issue creation: <command_placeholder>
-    - commentary as reply to pr comment: <command_placeholder>
+    - get list of all unresolved remarks: `gh api graphql -f query='{repository(owner: "OWNER", name: "REPO") { pullRequest(number: N) { reviewThreads(first: 20) { nodes { id isResolved comments(first: 1) { nodes { path line body } } } } } } }' | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | if .isResolved == false then "[\(.id)] \(.comments.nodes[0].path // "general"):\(.comments.nodes[0].line // "?") - \(.comments.nodes[0].body[:50])..." else empty end'`
+    - new issue creation: `gh issue create --title "Title" --body "Description" [--milestone "MilestoneName"] [--label "label"] [--assignee @me]` (Note: If issue created, link it in reply using thread ID)
+    - commentary as reply to pr comment: `gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Your reply"`
 15. **PR Confirm Remarks Fix**. Reviewer checks solutions for remarks, and either mark them as resolved, or reply with reason, why it consider it unresolved. Also reviewer may add some new remarks. After that **Code Review** stage repeats from begining until all remarks are resolved. Commands for:
-    - setting resolved commentary mark (if reviewer is AI agent): <command_placeholder>
-    - adding comment as reply to comment: <command_placeholder>
+    - setting resolved commentary mark (if reviewer is AI agent): `gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THREAD_ID" }) { clientMutationId } }'` where THREAD_ID from GraphQL query
+    - adding comment as reply to comment: `gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Your reply"`
 16. **PR Closure**. PR can be closed only if it has no unresolved reviewer remarks and human directly approved it is done. Comment describing whole developement process of this pull request may be added. Approved pull request should be merged to main branch with squach commits strategy. Commands for:
-    - adding comment to pr not assigned to code: <command_placeholder>
-    - merge pull request with squash commit strategy: <command_placeholder>
+    - check for unresolved remarks: `gh api graphql -f query='{repository(owner: "OWNER", name: "REPO") { pullRequest(number: N) { reviewThreads(first: 20) { nodes { id isResolved comments(first: 1) { nodes { path line body } } } } } } }' | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | if .isResolved == false then "[\(.id)] \(.comments.nodes[0].path // "general"):\(.comments.nodes[0].line // "?") - \(.comments.nodes[0].body[:50])..." else empty end'` (should return empty)
+    - adding comment to pr not assigned to code: `gh pr comment N --body "Comment text"`
+    - merge pull request with squash commit strategy: `gh pr merge N --squash --delete-branch`
 
 ### Issue Closing
 
