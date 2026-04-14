@@ -64,16 +64,16 @@ Detailed description of these stages presented in next paragraphs.
 
 4. **Implementation**. Assignee makes changes or experiments locally
 5. **Create Branch**. Create developement branch if code changes are required else proceed to **Issue Closing** stage. Command for:
-    - branch creation: <command_placeholder>, format of branch name: `[feature|bug]/issue-<issue_number>-<concise-branch-name>`
+    - branch creation: `git checkout -b [feature|bug]/issue-<issue_number>-<concise-branch-name>`, format of branch name: `[feature|bug]/issue-<issue_number>-<concise-branch-name>`
 6. **Run Tests**. Command for:
     - running tests: `PYTHONPATH=. pytest tests/`
 7. **Precommit Review**. Reviewers examines changes and make remarks. Them can also propose changes to code and documents in working copy. Asignee takes that remarks into consideration and makes or accepts necessary changes. If asked assignee makes intermidiate local commits (with amend if it is not first commit and fix were minor) for better track remark fixes and do them iteratively by small steps and not all at once. Commands for:
     - viewing what's changed: `git diff` or `git diff <file>`
-    - amend commit: <command_placeholder>
+    - amend commit: `git commit --amend`
 8. **Commit approval**. If reviewer confirms commit is ready, assignee do final commit with summary in commit message. Command for:
     - final commit: `git add <files> && git commit [--amend] -m "message"`
 9. **Commit message review**. Before making push to git, commit message should be reviewed by reviewer. If were are remarks for commit message, they should be fixed by assignee and amended. Command for:
-    - commit message amend: <command_placeholder>
+    - commit message amend: `git commit --amend -m "New message"`
 10. **Push Approval**. All git push commands should be explicitly approved by human, AI agent can not do it automatically. After push, proceed to **Code Review** section. Command for:
     - push: `git push`
 
@@ -102,10 +102,10 @@ Detailed description of these stages presented in next paragraphs.
 ### Issue Closing
 
 16. **Issue Close**. If issue is not closed by PR closing, close it. Command for:
-    - set close issue state: <command_placeholder>
+    - set close issue state: `gh issue close N`
 17. **Save AI development logs**. This step is optional. Human saves session logs from time to time as markdown files to `sessions\issue<#issue>` folder. Files may overlap (every next file may contain at the begining portion of the end of previous file). Compaction may take place. First lines of first files may relate to other issue. AI agent should create one file in format `YEAR-MONTH-DAY_session_<file_index>_issue_<issue_number>_<short_session_description>.md`. This file should be placed to project as gist and link to that gist should be attached to issue comment. Commands for:
-    - gist placement: <command_placeholder>
-    - adding gist link to issue coment: <command_placeholder>
+    - gist placement: `gh gist create --filename "FILENAME.md" --description "Session logs for issue #N" FILEPATH`
+    - adding gist link to issue coment: `gh issue comment N --body "Session logs: https://gist.github.com/GIST_ID"`
 
 That finalize work on issue.
 
