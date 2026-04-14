@@ -37,14 +37,14 @@ This defines how AI agent and human collaborate. Roles can reverse, and iteratio
 
 ### Core Principles
 
-This workflow does not include planning process, in which milestones and it's main set of issues are generated. It considers developement stages splited in following main categories:
+This workflow does not include the planning process, in which milestones and the main set of issues are generated. It considers development stages split in the following main categories:
 
 * Issue triage
 * Code development (creation of commits)
 * Code review (creation and closing of pull requests)
 * Issue closing
 
-Detailed description of these stages presented in next paragraphs.  
+Detailed description of these stages is presented in the next paragraphs.  
 
 ### Issue Triage
 
@@ -106,7 +106,7 @@ Detailed description of these stages presented in next paragraphs.
     - set close issue state: `gh issue close N`
 17. **Save AI development logs**. This step is optional. Human saves session logs from time to time as markdown files to `sessions/issue<#issue>/` folder. Files may overlap (every next file may contain at the begining portion of the end of previous file). Compaction may take place. First lines of first files may relate to other issue. AI agent should create one summary file in the format `YEAR-MONTH-DAY_session_<file_index>_issue_<issue_number>_<short_session_description>.md` in the `sessions/` directory (not in issue-specific subfolder). This file should NOT be committed to the repo - placed to project as gist and link to that gist should be attached to issue comment. Commands for:
     - gist placement: `gh gist create --filename "FILENAME.md" --description "Session logs for issue #N" FILEPATH`
-    - adding gist link to issue coment: `gh issue comment N --body "Session logs: https://gist.github.com/GIST_ID"`
+    - adding gist link to issue comment: `gh issue comment N --body "Session logs: https://gist.github.com/GIST_ID"`
 
 That finalize work on issue.
 
