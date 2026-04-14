@@ -80,9 +80,11 @@ Detailed description of these stages presented in next paragraphs.
 ### Code Review
 
 11. **PR Creation**. After first push on current issue branch, pull request should be created. It should be linked to project, it's milestone. Assignee should be set to account affiliated with AI agent or human. Reviewer also should be set. It is also to point out which issue cuurent pr is closing by adding finish line "Closes #<issue number>" in pr body description. Commands for:
-    - pull request creation: <command_placeholder>
-    - link pull request to project and milestone: <command_placeholder>
-    - set pull request assignee and reviewer: <command_placeholder>
+    - pull request creation: `gh pr create --title "Title" --body "Description" --base main --head branch-name` (Note: add "Closes #N" in body to close issue)
+    - link pull request to project: `gh api graphql -f query='mutation { addProjectV2ItemById(input: { projectId: "PROJECT_ID", contentId: "PR_NODE_ID" }) { clientMutationId } }'` where PROJECT_ID from `gh project list --owner USERNAME` and PR_NODE_ID from `gh pr view N --json id`
+    - set pull request milestone: `gh api graphql -f query='mutation { updatePullRequest(input: { pullRequestId: "PR_NODE_ID", milestoneId: "MILESTONE_NODE_ID" }) { clientMutationId } }'` where MILESTONE_NODE_ID from `gh api repos/OWNER/REPO/milestones/N --jq '.node_id'`
+    - set pull request assignee: `gh api graphql -f query='mutation { addAssigneesToAssignable(input: { assignableId: "PR_NODE_ID", assigneeIds: ["USER_ID"] }) { clientMutationId } }'` where USER_ID from `gh api graphql -f query='{user(login: "USERNAME") { id } }'`
+    - set pull request reviewer: `gh api graphql -f query='mutation { requestReviews(input: { pullRequestId: "PR_NODE_ID", userIds: ["USER_ID"] }) { clientMutationId } }'` where USER_ID from `gh api graphql -f query='{user(login: "USERNAME") { id } }'` (Note: PR creator cannot be a reviewer - use a different account)
 12. **PR Remarks**. Reviewer makes remarks and places them at the corespondent lines of code. If reviewer is AI agent then command for:
     - place first level comments in PR:
 13. **PR Create Issue**.  
