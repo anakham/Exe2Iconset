@@ -49,3 +49,7 @@ Repository = "https://github.com/anakham/Exe2Iconset"
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
