@@ -4,9 +4,29 @@ Cross-platform tool to extract icons from Windows EXE/DLL files and create macOS
 
 ## Installation
 
+### From PyPI (recommended)
+
 ```bash
-pip install Pillow pefile
+pip install exe2iconset
 ```
+
+### From source
+
+```bash
+pip install .
+```
+
+Or install in development mode:
+
+```bash
+pip install -e .
+```
+
+### Requirements
+
+- Python >= 3.10
+- Pillow >= 10.0.0
+- pefile >= 2023.2.7
 
 ## Usage
 
@@ -14,6 +34,10 @@ pip install Pillow pefile
 
 Run the GUI application:
 ```bash
+# After pip install
+exe2iconset-gui
+
+# Or with python -m
 python -m exe2iconset
 ```
 
@@ -34,14 +58,36 @@ run_gui()
 ### CLI
 
 ```bash
-# List available icon groups
+# Using the installed command
+exe2iconset <file.exe> --list
+
+# Or with python -m
 python -m exe2iconset <file.exe> --list
 
 # Create ICNS from specific group
-python -m exe2iconset <file.exe> -g icongroup_47_1033 -o output.icns
+exe2iconset <file.exe> -g icongroup_47_1033 -o output.icns
 
 # Create ICNS with iconset directory for inspection
-python -m exe2iconset <file.exe> -o output.icns --iconset
+exe2iconset <file.exe> -o output.icns --iconset
+```
+
+#### CLI Examples
+
+```bash
+# List all icon groups in a file
+exe2iconset app.exe --list
+
+# Extract icons using the first available group
+exe2iconset app.exe -o app.icns
+
+# Extract from a specific group (shown in --list output)
+exe2iconset app.exe -g icongroup_3_1033 -o myapp.icns
+
+# Create iconset directory for manual inspection
+exe2iconset app.exe -o app.icns --iconset
+
+# Verbose output
+exe2iconset app.exe -o app.icns -v
 ```
 
 #### CLI Options
@@ -95,7 +141,14 @@ For details on ICNS format, see:
 ## Testing
 
 Run tests with pytest:
+
 ```bash
-pip install pytest
-PYTHONPATH=. pytest tests/
+# Install test dependencies
+pip install exe2iconset[dev]
+
+# Or install from source with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/
 ```
