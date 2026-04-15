@@ -16,6 +16,23 @@ dependencies = [
     "Pillow>=10.0.0",
     "pefile>=2023.2.7",
 ]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = [
+    "icon", "icns", "macos", "apple", "exe", "dll",
+    "windows", "icon-set", "app-icon", "dock-icon",
+]
 
 [project.optional-dependencies]
 dev = [
