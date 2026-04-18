@@ -105,7 +105,7 @@ Detailed description of these stages is presented in the next paragraphs.
 16. **Issue Close**. If issue is not closed by PR closing, close it. Command for:
     - set close issue state: `gh issue close N`
 17. **Save AI development logs**. This step is optional. Human saves session logs from time to time as markdown files to `sessions/issue<#issue>/` folder. Files may overlap (every next file may contain at the beginning portion of the end of previous file). Compaction may take place. First lines of first files may relate to other issue. AI agent should create one summary file in the format `YEAR-MONTH-DAY_session_<file_index>_issue_<issue_number>_<short_session_description>.md` in the `sessions/` directory (not in issue-specific subfolder). This file should NOT be committed to the repo - placed to project as gist and link to that gist should be attached to issue comment. Commands for:
-    - gist placement: `gh gist create --filename "FILENAME.md" --description "Session logs for issue #N" FILEPATH`
+    - gist placement: `gh gist create --filename "FILENAME.md" --desc "Session logs for issue #N" FILEPATH`
     - adding gist link to issue comment: `gh issue comment N --body "Session logs: https://gist.github.com/GIST_ID"`
 
 That finalize work on issue.
