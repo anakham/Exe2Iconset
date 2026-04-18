@@ -1,7 +1,8 @@
 import struct
 import io
 from io import BytesIO
-from PIL import Image, ImageOps
+from PIL import Image
+from PIL.IcoImagePlugin import IcoFile
 
 try:
     import pefile
@@ -51,60 +52,77 @@ def _extract_resources_by_type(pe, resource_type_id, logger=None):
     return results
 
 
-def _fix_dib_data(data):
-    """Fix DIB (BMP) data from RT_ICON resources for proper PIL loading."""
-    if len(data) < 4:
-        return data
-    
-    header_size = int.from_bytes(data[0:4], 'little')
-    if header_size != 40:
-        return data
-    
-    biHeight = int.from_bytes(data[8:12], 'little', signed=True)
-    if biHeight < 0:
-        return data
-    
-    biWidth = int.from_bytes(data[4:8], 'little', signed=True)
-    if biWidth <= 0:
-        return data
-    
-    biBitCount = int.from_bytes(data[14:16], 'little')
-    
-    if biBitCount == 32:
-        actual_height = biHeight // 2
-        pixel_data = data[40:40 + biWidth * actual_height * 4]
-        ba = bytearray(pixel_data)
-        for i in range(0, len(ba), 4):
-            ba[i], ba[i+2] = ba[i+2], ba[i]
-        
-        img = Image.frombytes('RGBA', (biWidth, actual_height), bytes(ba), 'raw')
-        img = ImageOps.flip(img)
-        buf = BytesIO()
-        img.save(buf, 'PNG')
-        return buf.getvalue()
-    
-    fixed_data = bytearray(data)
-    struct.pack_into('<i', fixed_data, 8, biHeight // 2)
-    return bytes(fixed_data)
-
-
-def _read_icon_image(pe, offset, size):
+def _read_icon_image(pe, offset, size, icon_entry=None):
     """Read icon image from PE file and return RGBA PIL Image.
+    
+    Uses Pillow's IcoFile which properly handles:
+    - PNG images in resources
+    - 32-bit DIB with alpha channel
+    - Lower bit depth DIB with AND mask converted to alpha
     
     Args:
         pe: pefile.PE object
         offset: offset to icon data in memory-mapped image
         size: size of icon data
+        icon_entry: Optional dict with 'width', 'height', 'bit_count', 'bytes_in_res'
+                   If provided, builds proper ICO buffer for IcoFile parsing
         
     Returns:
         PIL Image in RGBA format, or None if extraction fails
     """
     raw_data = pe.get_memory_mapped_image()[offset:offset+size]
-    fixed_data = _fix_dib_data(raw_data)
+    
+    if len(raw_data) < 4:
+        return None
+    
+    # Check for PNG magic - direct PNG in resources
+    if raw_data[:4] == b'\x89PNG':
+        try:
+            img = Image.open(BytesIO(raw_data))
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            return img
+        except Exception:
+            pass
+    
+    # If we have icon entry metadata, build ICO buffer for proper parsing
+    return _read_via_icoimageplugin(raw_data, icon_entry)
+
+
+def _read_via_icoimageplugin(raw_data, icon_entry):
+    """Build ICO buffer and parse via IcoFile for proper AND mask handling."""
+    bpp = icon_entry.get('bit_count', 32)
+    width = icon_entry.get('width', 32)
+    height = icon_entry.get('height', 32)
+    if width == 0:
+        width = 256
+    if height == 0:
+        height = 256
+    
+    # Build ICO file structure:
+    # - 6 byte header: reserved(2) + type(2) + count(2)
+    # - 16 byte directory entry per image
+    # - image data
+    ico_header = struct.pack('<HHH', 0, 1, 1)  # reserved=0, type=1 (icon), count=1
+    
+    # Directory entry: width, height, colors, reserved, planes, bpp, size, offset
+    dir_entry = struct.pack('<BBBBHHII',
+        width if width < 256 else 0,
+        height if height < 256 else 0,
+        0,  # colors
+        0,  # reserved
+        1,  # planes
+        bpp,  # bit count
+        len(raw_data),  # size of image data
+        22  # offset to image data = 6 (header) + 16 (directory entry)
+    )
+    
+    ico_buffer = BytesIO(ico_header + dir_entry + raw_data)
     
     try:
-        img = Image.open(BytesIO(fixed_data))
-        if img.mode != 'RGBA':
+        ico = IcoFile(ico_buffer)
+        img = ico.getimage((width, height))
+        if img and img.mode != 'RGBA':
             img = img.convert('RGBA')
         return img
     except Exception:
@@ -195,7 +213,7 @@ def extract_icons_from_pe(file_path, logger=None):
                     continue
                 width = e['width'] if e['width'] != 0 else 256
                 height = e['height'] if e['height'] != 0 else 256
-                img = _read_icon_image(pe, icon_data.get('offset', 0), icon_data.get('size', 0))
+                img = _read_icon_image(pe, icon_data.get('offset', 0), icon_data.get('size', 0), e)
                 if img:
                     icon_list.append({
                         'width': width,
