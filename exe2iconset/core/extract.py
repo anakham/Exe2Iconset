@@ -1,5 +1,4 @@
 import struct
-import io
 from io import BytesIO
 from PIL import Image
 from PIL.IcoImagePlugin import IcoFile
@@ -137,7 +136,7 @@ def extract_icons_from_pe(file_path, logger=None):
         logger: Optional callable for logging messages
         
     Returns:
-        Dict mapping group keys to list of icon dicts with 'width', 'height', 'image'
+        Dict mapping group keys to list of icon dicts with 'width', 'height', 'bit_count', 'image'
     """
     def log(msg):
         if logger:
@@ -213,11 +212,13 @@ def extract_icons_from_pe(file_path, logger=None):
                     continue
                 width = e['width'] if e['width'] != 0 else 256
                 height = e['height'] if e['height'] != 0 else 256
+                bit_count = e['bit_count']
                 img = _read_icon_image(pe, icon_data.get('offset', 0), icon_data.get('size', 0), e)
                 if img:
                     icon_list.append({
                         'width': width,
                         'height': height,
+                        'bit_count': bit_count,
                         'image': img
                     })
 
@@ -227,8 +228,9 @@ def extract_icons_from_pe(file_path, logger=None):
                 log(f"Warning: Icon group {group_id} has no valid icons")
 
         for group_key, icon_list in groups.items():
-            log(f"Debug: Group {group_key}: {len(icon_list)} icon(s)")
-
+            resolutions = ", ".join(f"{icon['width']}x{icon['height']}@{icon['bit_count']}b" for icon in icon_list)
+            log(f"Debug: Group {group_key}: {len(icon_list)} icons ({resolutions})")
+            
         return groups
 
     except Exception as e:

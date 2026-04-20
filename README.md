@@ -103,13 +103,20 @@ exe2iconset app.exe -o app.icns -v
 ## Python API
 
 ```python
-from exe2iconset import extract_icons_from_pe, create_icns_from_images
+from exe2iconset import extract_icons_from_pe, create_icns_from_images, convert_icons_to_icns_sizes, ICON_TYPE_MAP
 
 # Extract icons from PE file
 icon_groups = extract_icons_from_pe("app.exe")
 
+# Convert extracted icons to PIL images with resolutions, sutable for ICNS
+mac_icon_sizes = list(ICON_TYPE_MAP.keys())
+convert_icons_to_icns_sizes(icon_data_list, mac_icon_sizes)
+
 # Create ICNS from images
 create_icns_from_images(icon_images, "app.icns")
+
+# Also you can save images as iconset directory
+save_iconset(icon_images, "app.iconset")
 ```
 
 ## ICNS Format

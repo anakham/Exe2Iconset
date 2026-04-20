@@ -1,4 +1,5 @@
 from PIL import Image
+from bisect import bisect_left, bisect_right
 
 try:
     from .extract import extract_icons_from_pe
@@ -18,33 +19,41 @@ def convert_icons_to_icns_sizes(icon_data_list, mac_icon_sizes):
     """
     regular_icons = {}
     
-    icon_sizes = []
+    icon_selected = dict()
     for icon_entry in icon_data_list:
         try:
             img = icon_entry['image'].copy()
-            icon_sizes.append((icon_entry['width'], icon_entry['height'], img))
+            (w, h) = (icon_entry['width'], icon_entry['height'])
+            bc = icon_entry['bit_count']
+            if (w, h) in icon_selected:
+                if bc < icon_selected[(w,h)][0]:
+                    continue
+            icon_selected[(w, h)] = (bc , img)
         except Exception:
             continue
-    
-    icon_sizes.sort(key=lambda x: x[0] * x[1], reverse=True)
-    
-    for target_w, target_h in mac_icon_sizes:
-        best_source = None
-        best_diff = float('inf')
-        
-        for src_w, src_h, src_data in icon_sizes:
-            diff = abs(src_w - target_w) + abs(src_h - target_h)
-            if diff < best_diff:
-                best_diff = diff
-                best_source = (src_w, src_h, src_data)
-        
-        if best_source:
-            src_w, src_h, src_img = best_source
-            src_img = src_img.copy()
-            
+
+    target_sizes = mac_icon_sizes.copy()
+    icon_selected = dict(sorted(icon_selected.items()))
+
+    resolutions_with_exact_match = set()
+
+    for (src_w, src_h), (_, src_img) in icon_selected.items():
+        lt = bisect_left(target_sizes, (src_w, src_h))
+        rt = bisect_right(target_sizes, (src_w, src_h))
+        if lt == rt:
+            lt = lt - 1
+
+        for target_w, target_h in target_sizes[lt:rt]:            
             try:
-                resized = src_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-                regular_icons[(target_w, target_h)] = resized
+                resized = src_img
+                resize_done = False
+                if (target_w, target_h) != (src_w, src_h):
+                    resized = src_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                    resize_done = True
+                if (target_w, target_h) not in resolutions_with_exact_match:
+                    regular_icons[(target_w, target_h)] = resized
+                if not resize_done:
+                    resolutions_with_exact_match.add((target_w, target_h))
             except Exception:
                 pass
     

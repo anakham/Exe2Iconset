@@ -230,49 +230,11 @@ class IconExtractorApp:
             icon_data_list = self.icon_series[self.selected_series_key]
             
             iconset_name = self.output_name.get() + ".iconset"
-            iconset_path = os.path.join(output_dir, iconset_name)
-            
-            if os.path.exists(iconset_path):
-                shutil.rmtree(iconset_path)
-            
-            os.makedirs(iconset_path)
+            iconset_path = os.path.join(output_dir, iconset_name)                      
             
             mac_icon_sizes = list(ICON_TYPE_MAP.keys())
             
-            icon_sizes = []
-            for icon_entry in icon_data_list:
-                try:
-                    img = icon_entry['image'].copy()
-                    icon_sizes.append((icon_entry['width'], icon_entry['height'], img))
-                except Exception as e:
-                    self.log_status(f"Warning: Could not read icon data: {str(e)}")
-                    continue
-            
-            icon_sizes.sort(key=lambda x: x[0] * x[1], reverse=True)
-            
-            self.log_status(f"Processing {len(icon_sizes)} icons...")
-            
-            regular_icons = {}
-            
-            for target_w, target_h in mac_icon_sizes:
-                best_source = None
-                best_diff = float('inf')
-                
-                for src_w, src_h, src_data in icon_sizes:
-                    diff = abs(src_w - target_w) + abs(src_h - target_h)
-                    if diff < best_diff:
-                        best_diff = diff
-                        best_source = (src_w, src_h, src_data)
-                
-                if best_source:
-                    src_w, src_h, src_img = best_source
-                    src_img = src_img.copy()
-                    
-                    try:
-                        resized = src_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-                        regular_icons[(target_w, target_h)] = resized
-                    except Exception as e:
-                        self.log_status(f"Error processing icon: {str(e)}")
+            regular_icons = convert_icons_to_icns_sizes(icon_data_list, mac_icon_sizes)
             
             self.log_status(f"Created {len(regular_icons)} icon sizes for ICNS.")
             
@@ -288,12 +250,11 @@ class IconExtractorApp:
                         f"Also save iconset directory for inspection?")
                     
                     if response:
-                        os.makedirs(iconset_path, exist_ok=True)
-                        for (w, h), img in regular_icons.items():
-                            img.save(os.path.join(iconset_path, f"icon_{w}x{h}.png"), 'PNG')
-                        self.log_status(f"Saved iconset in: {iconset_path}")
+                        if os.path.exists(iconset_path):
+                            shutil.rmtree(iconset_path)
+                        save_iconset(regular_icons, iconset_path)
                 else:
-                    self.log_status(f"Failed to create ICNS")
+                    self.log_status("Failed to create ICNS")
             except Exception as e:
                 self.log_status(f"Failed to create ICNS: {str(e)}")
             

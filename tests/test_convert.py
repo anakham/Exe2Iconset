@@ -28,7 +28,11 @@ def test_convert_icons_empty_list():
 
 def test_convert_icons_all_sizes(sample_image):
     """Test conversion to all ICNS sizes."""
-    icon_data = [{'width': 512, 'height': 512, 'image': sample_image}]
+    sample_icon_size = 512
+    icon_data = [{'width': sample_icon_size, 
+                  'height': sample_icon_size,
+                  'bit_count': 32,
+                  'image': sample_image}]
     mac_icon_sizes = list(ICON_TYPE_MAP.keys())
     
     result = convert_icons_to_icns_sizes(icon_data, mac_icon_sizes)
@@ -52,6 +56,7 @@ def test_save_iconset(sample_icon_list, tmp_path):
 def test_save_iconset_empty(tmp_path):
     """Test saving empty iconset."""
     result = save_iconset({}, str(tmp_path / "empty"))
+    assert result is True
     assert os.path.exists(tmp_path / "empty")
 
 

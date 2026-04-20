@@ -23,6 +23,6 @@ def sample_icon_list(make_image):
     sizes = [(256, 256), (128, 128), (64, 64), (32, 32)]
     colors = [(255, 0, 0, 255), (0, 255, 0, 255), (0, 0, 255, 255), (255, 255, 0, 255)]
     return [
-        {'width': w, 'height': h, 'image': make_image((w, h), c)}
+        {'width': w, 'height': h, 'bit_count': 32, 'image': make_image((w, h), c)}
         for (w, h), c in zip(sizes, colors)
     ]
