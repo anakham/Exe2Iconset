@@ -1,8 +1,5 @@
 import os
-import shutil
 import struct
-import subprocess
-import sys
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -21,6 +18,7 @@ class IconExtractorApp:
         self.root.geometry("900x700")
         
         self.exe_path = tk.StringVar()
+        self.output_dir = tk.StringVar()
         self.selected_icons = []
         self.icon_series = {}
         self.selected_series_key = None
@@ -48,17 +46,45 @@ class IconExtractorApp:
         
         exe_entry = ttk.Entry(step1_frame, textvariable=self.exe_path, width=50)
         exe_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 5))
+        exe_entry.bind('<Return>', lambda e: self.extract_icons())
         
         ttk.Button(step1_frame, text="Browse...", command=self.browse_exe).grid(row=0, column=2)
-        ttk.Button(step1_frame, text="Extract Icons", command=self.extract_icons).grid(row=0, column=3, padx=(10, 0))
         
-        step2_frame = ttk.LabelFrame(main_frame, text="Step 2: Select Icon Series", padding="10")
-        step2_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        self.output_name = tk.StringVar(value="appicon")
+        self.save_icns = tk.BooleanVar(value=True)
+        self.save_iconset = tk.BooleanVar(value=False)
         
-        step2_frame.columnconfigure(0, weight=1)
-        step2_frame.rowconfigure(0, weight=1)
+        step2_frame = ttk.LabelFrame(main_frame, text="Step 2: Select Output Path", padding="10")
+        step2_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        step2_frame.columnconfigure(1, weight=1)
         
-        icon_canvas_frame = ttk.Frame(step2_frame)
+        ttk.Label(step2_frame, text="Output Folder:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+        
+        output_dir_entry = ttk.Entry(step2_frame, textvariable=self.output_dir, width=50)
+        output_dir_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 5))
+        self.output_dir.trace_add('write', lambda *args: self.update_output_preview())
+        
+        ttk.Button(step2_frame, text="Browse...", command=self.browse_output_dir).grid(row=0, column=2)
+        
+        ttk.Label(step2_frame, text="Name:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5))
+        
+        output_name_entry = ttk.Entry(step2_frame, textvariable=self.output_name, width=30)
+        output_name_entry.grid(row=1, column=1, sticky=tk.W, padx=(0, 20))
+        self.output_name.trace_add('write', lambda *args: self.update_output_preview())
+        
+        ttk.Checkbutton(step2_frame, text=".icns", variable=self.save_icns, command=self.update_output_preview).grid(row=1, column=2, padx=(10, 0))
+        ttk.Checkbutton(step2_frame, text=".iconset directory", variable=self.save_iconset, command=self.update_output_preview).grid(row=1, column=3)
+        
+        self.output_preview = ttk.Label(step2_frame, text="", font=("Arial", 9), foreground="#666")
+        self.output_preview.grid(row=2, column=0, columnspan=4, pady=(5, 0))
+        
+        step3_frame = ttk.LabelFrame(main_frame, text="Step 3: Select and Convert", padding="10")
+        step3_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        
+        step3_frame.columnconfigure(0, weight=1)
+        step3_frame.rowconfigure(0, weight=1)
+        
+        icon_canvas_frame = ttk.Frame(step3_frame)
         icon_canvas_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         icon_canvas_frame.columnconfigure(0, weight=1)
         icon_canvas_frame.rowconfigure(0, weight=1)
@@ -81,17 +107,6 @@ class IconExtractorApp:
         self.icon_container.bind("<Configure>", configure_canvas)
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(self.icon_window, width=e.width))
         
-        step3_frame = ttk.LabelFrame(main_frame, text="Step 3: Convert to macOS ICNS", padding="10")
-        step3_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
-        
-        ttk.Label(step3_frame, text="Output Name:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
-        
-        self.output_name = tk.StringVar(value="appicon")
-        output_entry = ttk.Entry(step3_frame, textvariable=self.output_name, width=30)
-        output_entry.grid(row=0, column=1, sticky=tk.W, padx=(0, 20))
-        
-        ttk.Button(step3_frame, text="Create ICNS Package", command=self.create_icns).grid(row=0, column=2)
-        
         status_frame = ttk.LabelFrame(main_frame, text="Status", padding="10")
         status_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
         status_frame.columnconfigure(0, weight=1)
@@ -100,7 +115,7 @@ class IconExtractorApp:
                                    relief=tk.FLAT)
         self.status_text.grid(row=0, column=0, sticky=(tk.W, tk.E))
         
-        main_frame.rowconfigure(2, weight=1)
+        main_frame.rowconfigure(3, weight=1)
     
     def check_requirements(self):
         missing_tools = []
@@ -126,7 +141,35 @@ class IconExtractorApp:
         )
         if filename:
             self.exe_path.set(filename)
+            
+            exe_dir = os.path.dirname(filename)
+            exe_stem = os.path.splitext(os.path.basename(filename))[0]
+            self.output_dir.set(exe_dir)
+            self.output_name.set(exe_stem)
+            self.update_output_preview()
+            
             self.log_status(f"Selected file: {filename}")
+            self.extract_icons()
+    
+    def browse_output_dir(self):
+        dirname = filedialog.askdirectory(title="Select Output Directory")
+        if dirname:
+            self.output_dir.set(dirname)
+            self.update_output_preview()
+    
+    def update_output_preview(self, *args):
+        output_dir = self.output_dir.get()
+        output_name = self.output_name.get()
+        parts = []
+        if self.save_icns.get():
+            parts.append(output_name + ".icns")
+        if self.save_iconset.get():
+            parts.append(output_name + ".iconset")
+        if not parts:
+            self.output_preview.config(text="Select .icns and/or .iconset to save output")
+        elif output_dir:
+            preview_text = "Output: " + ", ".join(parts) + " in " + output_dir
+            self.output_preview.config(text=preview_text)
     
     def extract_icons(self):
         if not self.exe_path.get():
@@ -188,16 +231,16 @@ class IconExtractorApp:
             info_label = ttk.Label(series_frame, text=f"{len(icon_data_list)} icons")
             info_label.grid(row=1, column=0, padx=5, pady=(0, 5))
             
-            select_btn = ttk.Button(series_frame, text="Select Series", 
-                                    command=lambda sn=series_name: self.select_series(sn))
-            select_btn.grid(row=2, column=0, padx=5, pady=(0, 5))
+            convert_btn = ttk.Button(series_frame, text="Convert", 
+                                    command=lambda sn=series_name: self.select_and_convert(sn))
+            convert_btn.grid(row=2, column=0, padx=5, pady=(0, 5))
             
             col += 1
             if col >= max_cols:
                 col = 0
                 row += 1
         
-        self.log_status(f"Found {len(self.icon_series)} icon series. Select one to convert.")
+        self.log_status(f"Found {len(self.icon_series)} icon series. Click 'Convert' to create ICNS.")
     
     def select_series(self, series_name):
         self.selected_series_key = series_name
@@ -210,26 +253,33 @@ class IconExtractorApp:
                 else:
                     child.configure(relief=tk.RAISED)
     
+    def select_and_convert(self, series_name):
+        self.select_series(series_name)
+        self.create_icns()
+    
     def create_icns(self):
         if (self.selected_series_key is None) or not self.icon_series.get(self.selected_series_key):
             messagebox.showerror("Error", "Please select an icon series first")
             return
         
-        output_dir = filedialog.askdirectory(title="Select Output Directory")
-        if not output_dir:
-            return
+        if not self.output_dir.get():
+            self.browse_output_dir()
+            if not self.output_dir.get():
+                return
         
-        thread = threading.Thread(target=self._create_icns_thread, args=(output_dir,))
+        thread = threading.Thread(target=self._create_icns_thread)
         thread.daemon = True
         thread.start()
     
-    def _create_icns_thread(self, output_dir):
+    def _create_icns_thread(self):
+        output_dir = self.output_dir.get()
         self.log_status("Starting ICNS conversion...")
         
         try:
             icon_data_list = self.icon_series[self.selected_series_key]
+            output_name = self.output_name.get()
             
-            iconset_name = self.output_name.get() + ".iconset"
+            iconset_name = output_name + ".iconset"
             iconset_path = os.path.join(output_dir, iconset_name)                      
             
             mac_icon_sizes = list(ICON_TYPE_MAP.keys())
@@ -238,32 +288,28 @@ class IconExtractorApp:
             
             self.log_status(f"Created {len(regular_icons)} icon sizes for ICNS.")
             
-            icns_path = os.path.join(output_dir, self.output_name.get() + ".icns")
+            icns_path = os.path.join(output_dir, output_name + ".icns")
             
+            saved = []
             try:
-                if create_icns_from_images(regular_icons, icns_path):
-                    self.log_status(f"Successfully created ICNS file: {icns_path}")
-                    
-                    response = messagebox.askyesno("Success", 
-                        f"ICNS file created successfully!\n\n"
-                        f"Location: {icns_path}\n\n"
-                        f"Also save iconset directory for inspection?")
-                    
-                    if response:
-                        if os.path.exists(iconset_path):
-                            shutil.rmtree(iconset_path)
-                        save_iconset(regular_icons, iconset_path)
-                else:
-                    self.log_status("Failed to create ICNS")
+                if self.save_icns.get():
+                    if create_icns_from_images(regular_icons, icns_path):
+                        saved.append(icns_path)
+                        self.log_status(f"Successfully created ICNS file: {icns_path}")
+                    else:
+                        self.log_status("Failed to create ICNS")
+                if self.save_iconset.get():
+                    if not os.path.exists(iconset_path):
+                        os.makedirs(iconset_path)
+                    save_iconset(regular_icons, iconset_path)
+                    saved.append(iconset_path)
+                    self.log_status(f"Successfully created iconset: {iconset_path}")
             except Exception as e:
-                self.log_status(f"Failed to create ICNS: {str(e)}")
+                self.log_status(f"Failed to create output: {str(e)}")
             
-            if sys.platform == 'win32':
-                os.startfile(output_dir)
-            elif sys.platform == 'darwin':
-                subprocess.run(['open', output_dir])
-            elif sys.platform == 'linux':
-                subprocess.run(['xdg-open', output_dir])
+            if saved:
+                self.root.after(0, lambda: messagebox.showinfo("Success", 
+                    f"Created:\n" + "\n".join(saved)))
                 
         except Exception as e:
             self.log_status(f"Error creating ICNS: {str(e)}")
