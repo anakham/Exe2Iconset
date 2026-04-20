@@ -251,7 +251,7 @@ class IconExtractorApp:
                     
                     if response:
                         if os.path.exists(iconset_path):
-                            shutil.rmtree(iconset_path)  
+                            shutil.rmtree(iconset_path)
                         save_iconset(regular_icons, iconset_path)
                 else:
                     self.log_status("Failed to create ICNS")
