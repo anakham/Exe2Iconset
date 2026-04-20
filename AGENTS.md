@@ -170,6 +170,92 @@ gh api repos/OWNER/REPO/pulls/N -X PATCH -F body="New description text"
 gh pr merge N --squash --delete-branch
 ```
 
+### Adding Line Comments to PR
+
+Use GraphQL `addPullRequestReviewThread` mutation:
+
+```bash
+# First, get PR node ID:
+gh api graphql -f query='{repository(owner:"OWNER", name:"REPO") { pullRequest(number: N) { id } }}'
+
+# Add line comment:
+gh api graphql -f query='mutation {
+  addPullRequestReviewThread(input: {
+    pullRequestId: "PR_NODE_ID",
+    line: LINE_NUMBER,
+    side: RIGHT,
+    body: "Comment text",
+    path: "path/to/file.py"
+  }) {
+    thread { id }
+  }
+}'
+```
+
+Note: `side: RIGHT` shows the comment on the right side of the diff (added lines).
+
+### Deleting Comments
+
+```bash
+# Delete line comment (PRRC_ ID prefix):
+gh api graphql -f query='mutation {
+  deletePullRequestReviewComment(input: {id: "PRRC_ID"}) {
+    clientMutationId
+  }
+}'
+
+# Delete PR/Issue comment (IC_ ID prefix):
+gh api graphql -f query='mutation {
+  deleteIssueComment(input: {id: "IC_ID"}) {
+    clientMutationId
+  }
+}'
+```
+
+To find comment IDs, query review threads:
+```bash
+gh api graphql -f query='{repository(owner:"OWNER", name:"REPO") { 
+  pullRequest(number: N) { 
+    reviewThreads(first: 20) { 
+      nodes { id line comments(first:5) { nodes { id body } } } 
+    } 
+  } 
+ }}'
+```
+
+### Resolving/Unresolving Review Threads
+
+```bash
+# Resolve thread:
+gh api graphql -f query='mutation {
+  resolveReviewThread(input: {threadId: "THREAD_ID"}) {
+    clientMutationId
+  }
+}'
+
+# Unresolve thread:
+gh api graphql -f query='mutation {
+  unresolveReviewThread(input: {threadId: "THREAD_ID"}) {
+    clientMutationId
+  }
+}'
+```
+
+### Approving/Requesting Changes on PR
+
+```bash
+# Approve PR:
+gh pr review N --approve
+
+# Request changes:
+gh pr review N --request-changes --body "Description of changes needed"
+
+# Comment only (no approval/status):
+gh pr review N --body "Comment text"
+```
+
+Note: A user cannot approve their own PR. The PR creator must use a different account to approve.
+
 ---
 
 ## Git Commands Reference
