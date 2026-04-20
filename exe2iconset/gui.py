@@ -92,13 +92,11 @@ class IconExtractorApp:
         tree_frame.columnconfigure(0, weight=1)
         tree_frame.rowconfigure(0, weight=1)
         
-        self.icon_tree = ttk.Treeview(tree_frame, columns=("name", "count", "action"), show="headings", selectmode="browse")
+        self.icon_tree = ttk.Treeview(tree_frame, columns=("name", "count"), show="headings", selectmode="browse")
         self.icon_tree.heading("name", text="Series Name")
         self.icon_tree.heading("count", text="Icons")
-        self.icon_tree.heading("action", text="")
-        self.icon_tree.column("name", width=300)
+        self.icon_tree.column("name", width=350)
         self.icon_tree.column("count", width=60)
-        self.icon_tree.column("action", width=80)
         
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.icon_tree.yview)
         self.icon_tree.configure(yscrollcommand=vsb.set)
@@ -106,9 +104,10 @@ class IconExtractorApp:
         self.icon_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         vsb.grid(row=0, column=1, sticky=(tk.N, tk.S))
         
-        self.icon_tree.bind("<Button-1>", self._on_tree_click)
-        
         self.icon_tree.bind("<<TreeviewSelect>>", self._on_tree_select)
+        
+        self.convert_btn = ttk.Button(step3_frame, text="Convert to ICNS", command=self.on_convert_click)
+        self.convert_btn.grid(row=2, column=0, pady=(10, 0), sticky=(tk.W, tk.E))
         
         status_frame = ttk.LabelFrame(main_frame, text="Status", padding="10")
         status_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
@@ -225,11 +224,18 @@ class IconExtractorApp:
         
         for series_name, icon_data_list in self.icon_series.items():
             count = len(icon_data_list)
-            self.icon_tree.insert("", "end", values=(series_name, count, "Convert"))
+            self.icon_tree.insert("", "end", values=(series_name, count))
         
         self.progress["maximum"] = total
         self.progress["value"] = total
-        self.log_status(f"Found {len(self.icon_series)} icon series. Click 'Convert' to create ICNS.")
+        
+        if total == 1:
+            first_item = self.icon_tree.get_children()[0]
+            self.icon_tree.selection_set(first_item)
+            self.selected_series_key = self.icon_tree.item(first_item, "values")[0]
+            self.log_status(f"Found 1 icon series. Click 'Convert' to create ICNS.")
+        else:
+            self.log_status(f"Found {len(self.icon_series)} icon series. Select one and click 'Convert'.")
     
     def _on_tree_select(self, event):
         selection = self.icon_tree.selection()
@@ -238,21 +244,17 @@ class IconExtractorApp:
             series_name = self.icon_tree.item(item, "values")[0]
             self.select_series(series_name)
     
-    def _on_tree_click(self, event):
-        region = self.icon_tree.identify_region(event.x, event.y)
-        if region == "cell":
-            column = self.icon_tree.identify_column(event.x)
-            item = self.icon_tree.identify_row(event.y)
-            if item and column == "#3":
-                series_name = self.icon_tree.item(item, "values")[0]
-                self.select_and_convert(series_name)
-    
     def select_series(self, series_name):
         self.selected_series_key = series_name
-    
-    def select_and_convert(self, series_name):
-        self.select_series(series_name)
         self.log_status(f"Selected series: {series_name} with {len(self.icon_series[series_name])} icons")
+    
+    def on_convert_click(self):
+        if self.selected_series_key is None:
+            if len(self.icon_series) == 1:
+                self.selected_series_key = list(self.icon_series.keys())[0]
+            else:
+                messagebox.showwarning("Select Series", "Please select an icon series from the list.")
+                return
         self.create_icns()
     
     def create_icns(self):
