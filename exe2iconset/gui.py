@@ -82,30 +82,33 @@ class IconExtractorApp:
         step3_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
         
         step3_frame.columnconfigure(0, weight=1)
-        step3_frame.rowconfigure(0, weight=1)
+        step3_frame.rowconfigure(1, weight=1)
         
-        icon_canvas_frame = ttk.Frame(step3_frame)
-        icon_canvas_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        icon_canvas_frame.columnconfigure(0, weight=1)
-        icon_canvas_frame.rowconfigure(0, weight=1)
+        self.progress = ttk.Progressbar(step3_frame, mode='determinate')
+        self.progress.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
         
-        canvas = tk.Canvas(icon_canvas_frame, highlightthickness=1, highlightbackground='#ccc')
-        canvas.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        tree_frame = ttk.Frame(step3_frame)
+        tree_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        tree_frame.columnconfigure(0, weight=1)
+        tree_frame.rowconfigure(0, weight=1)
         
-        scrollbar = ttk.Scrollbar(icon_canvas_frame, orient="vertical", command=canvas.yview)
-        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.icon_tree = ttk.Treeview(tree_frame, columns=("name", "count", "action"), show="headings", selectmode="browse")
+        self.icon_tree.heading("name", text="Series Name")
+        self.icon_tree.heading("count", text="Icons")
+        self.icon_tree.heading("action", text="")
+        self.icon_tree.column("name", width=300)
+        self.icon_tree.column("count", width=60)
+        self.icon_tree.column("action", width=80)
         
-        canvas.configure(yscrollcommand=scrollbar.set)
+        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.icon_tree.yview)
+        self.icon_tree.configure(yscrollcommand=vsb.set)
         
-        self.icon_container = ttk.Frame(canvas)
-        self.icon_window = canvas.create_window((0, 0), window=self.icon_container, anchor=tk.NW)
+        self.icon_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        vsb.grid(row=0, column=1, sticky=(tk.N, tk.S))
         
-        def configure_canvas(event):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-            canvas.itemconfig(self.icon_window, width=canvas.winfo_width())
+        self.icon_tree.bind("<Button-1>", self._on_tree_click)
         
-        self.icon_container.bind("<Configure>", configure_canvas)
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(self.icon_window, width=e.width))
+        self.icon_tree.bind("<<TreeviewSelect>>", self._on_tree_select)
         
         status_frame = ttk.LabelFrame(main_frame, text="Status", padding="10")
         status_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
@@ -176,8 +179,12 @@ class IconExtractorApp:
             messagebox.showerror("Error", "Please select an EXE file first")
             return
         
-        for widget in self.icon_container.winfo_children():
-            widget.destroy()
+        for item in self.icon_tree.get_children():
+            self.icon_tree.delete(item)
+        
+        self.visible_items = []
+        self.loaded_count = 0
+        self.progress["value"] = 0
         
         self.selected_icons = []
         self.icon_series = {}
@@ -189,16 +196,20 @@ class IconExtractorApp:
     def _extract_icons_thread(self):
         self.log_status("Extracting icons from PE resources...")
         
+        def progress_callback(current, total):
+            self.root.after(0, lambda c=current, t=total: self.progress.config(value=c * 100 // t))
+        
         try:
-            icon_files = extract_icons_from_pe(self.exe_path.get(), self.log_status)
+            icon_files = extract_icons_from_pe(self.exe_path.get(), self.log_status, progress_callback)
             if not icon_files:
                 self.log_status("No icons found in the PE resources.")
+                self.root.after(0, lambda: self.progress.config(value=0))
                 return
 
             self.icon_series = icon_files
             self.log_status(f"Extracted {len(self.icon_series)} icon groups from PE resources.")
 
-            self.root.after(0, self.display_icons)
+            self.display_icons()
             return
 
         except Exception as e:
@@ -206,55 +217,42 @@ class IconExtractorApp:
             return
     
     def display_icons(self):
-        row, col = 0, 0
-        max_cols = 5
+        self.visible_items = list(self.icon_series.keys())
+        total = len(self.visible_items)
+        
+        for item in self.icon_tree.get_children():
+            self.icon_tree.delete(item)
         
         for series_name, icon_data_list in self.icon_series.items():
-            series_frame = ttk.LabelFrame(self.icon_container, text=series_name, padding="5")
-            series_frame.grid(row=row, column=col, padx=5, pady=5, sticky=(tk.W, tk.E, tk.N, tk.S))
-            
-            if icon_data_list:
-                try:
-                    first_icon = icon_data_list[0]
-                    img = first_icon['image'].resize((64, 64), Image.Resampling.LANCZOS)
-                    
-                    photo = ImageTk.PhotoImage(img)
-                    
-                    icon_label = ttk.Label(series_frame, image=photo)
-                    icon_label.image = photo
-                    icon_label.grid(row=0, column=0, padx=5, pady=5)
-                    
-                except Exception as e:
-                    error_label = ttk.Label(series_frame, text=f"Error: {str(e)[:20]}")
-                    error_label.grid(row=0, column=0, padx=5, pady=5)
-            
-            info_label = ttk.Label(series_frame, text=f"{len(icon_data_list)} icons")
-            info_label.grid(row=1, column=0, padx=5, pady=(0, 5))
-            
-            convert_btn = ttk.Button(series_frame, text="Convert", 
-                                    command=lambda sn=series_name: self.select_and_convert(sn))
-            convert_btn.grid(row=2, column=0, padx=5, pady=(0, 5))
-            
-            col += 1
-            if col >= max_cols:
-                col = 0
-                row += 1
+            count = len(icon_data_list)
+            self.icon_tree.insert("", "end", values=(series_name, count, "Convert"))
         
+        self.progress["maximum"] = total
+        self.progress["value"] = total
         self.log_status(f"Found {len(self.icon_series)} icon series. Click 'Convert' to create ICNS.")
+    
+    def _on_tree_select(self, event):
+        selection = self.icon_tree.selection()
+        if selection:
+            item = selection[0]
+            series_name = self.icon_tree.item(item, "values")[0]
+            self.select_series(series_name)
+    
+    def _on_tree_click(self, event):
+        region = self.icon_tree.identify_region(event.x, event.y)
+        if region == "cell":
+            column = self.icon_tree.identify_column(event.x)
+            item = self.icon_tree.identify_row(event.y)
+            if item and column == "#3":
+                series_name = self.icon_tree.item(item, "values")[0]
+                self.select_and_convert(series_name)
     
     def select_series(self, series_name):
         self.selected_series_key = series_name
-        self.log_status(f"Selected series: {series_name} with {len(self.icon_series[series_name])} icons")
-        
-        for child in self.icon_container.winfo_children():
-            if isinstance(child, ttk.LabelFrame):
-                if child.cget('text') == series_name:
-                    child.configure(relief=tk.SUNKEN)
-                else:
-                    child.configure(relief=tk.RAISED)
     
     def select_and_convert(self, series_name):
         self.select_series(series_name)
+        self.log_status(f"Selected series: {series_name} with {len(self.icon_series[series_name])} icons")
         self.create_icns()
     
     def create_icns(self):
@@ -266,6 +264,8 @@ class IconExtractorApp:
             self.browse_output_dir()
             if not self.output_dir.get():
                 return
+        
+        self.icon_tree.config(selectmode="none")
         
         thread = threading.Thread(target=self._create_icns_thread)
         thread.daemon = True
@@ -283,22 +283,27 @@ class IconExtractorApp:
             iconset_path = os.path.join(output_dir, iconset_name)                      
             
             mac_icon_sizes = list(ICON_TYPE_MAP.keys())
+            total_sizes = len(mac_icon_sizes)
+            
+            self.log_status(f"Converting {len(icon_data_list)} icons to {total_sizes} sizes...")
             
             regular_icons = convert_icons_to_icns_sizes(icon_data_list, mac_icon_sizes)
             
-            self.log_status(f"Created {len(regular_icons)} icon sizes for ICNS.")
+            self.log_status(f"Created {len(regular_icons)} icon sizes.")
             
             icns_path = os.path.join(output_dir, output_name + ".icns")
             
             saved = []
             try:
                 if self.save_icns.get():
+                    self.log_status("Creating ICNS file...")
                     if create_icns_from_images(regular_icons, icns_path):
                         saved.append(icns_path)
                         self.log_status(f"Successfully created ICNS file: {icns_path}")
                     else:
                         self.log_status("Failed to create ICNS")
                 if self.save_iconset.get():
+                    self.log_status("Creating iconset directory...")
                     if not os.path.exists(iconset_path):
                         os.makedirs(iconset_path)
                     save_iconset(regular_icons, iconset_path)
@@ -313,6 +318,8 @@ class IconExtractorApp:
                 
         except Exception as e:
             self.log_status(f"Error creating ICNS: {str(e)}")
+        finally:
+            self.root.after(0, lambda: self.icon_tree.config(selectmode="browse"))
     
     def log_status(self, message):
         def update_status():

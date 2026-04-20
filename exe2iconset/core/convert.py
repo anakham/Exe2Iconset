@@ -43,7 +43,7 @@ def convert_icons_to_icns_sizes(icon_data_list, mac_icon_sizes):
         if lt == rt:
             lt = lt - 1
 
-        for target_w, target_h in target_sizes[lt:rt]:            
+        for target_w, target_h in target_sizes[lt:rt]:
             try:
                 resized = src_img
                 resize_done = False

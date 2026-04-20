@@ -128,12 +128,13 @@ def _read_via_icoimageplugin(raw_data, icon_entry):
         return None
 
 
-def extract_icons_from_pe(file_path, logger=None):
+def extract_icons_from_pe(file_path, logger=None, progress_callback=None):
     """Extract icon groups from PE resources using pefile.
     
     Args:
         file_path: Path to PE file (exe, dll, mun)
         logger: Optional callable for logging messages
+        progress_callback: Optional callable(current, total) for progress updates
         
     Returns:
         Dict mapping group keys to list of icon dicts with 'width', 'height', 'bit_count', 'image'
@@ -141,6 +142,10 @@ def extract_icons_from_pe(file_path, logger=None):
     def log(msg):
         if logger:
             logger(msg)
+    
+    def progress(current, total):
+        if progress_callback:
+            progress_callback(current, total)
     
     try:
         if pefile is None:
@@ -175,7 +180,10 @@ def extract_icons_from_pe(file_path, logger=None):
         log(f"Debug: Found {len(rt_group_resources)} RT_GROUP_ICON entries")
         
         group_icon_entries = [(res['id'], res['lang'], res['offset'], res['size']) for res in rt_group_resources]
-
+        
+        total_groups = len(group_icon_entries)
+        processed = 0
+        
         for group_id, group_lang, data_offset, size in group_icon_entries:
             data = pe.get_memory_mapped_image()[data_offset:data_offset+size]
             if len(data) < 6:
@@ -226,7 +234,12 @@ def extract_icons_from_pe(file_path, logger=None):
                 groups[group_key] = icon_list
             else:
                 log(f"Warning: Icon group {group_id} has no valid icons")
+            
+            processed += 1
+            progress(processed, total_groups)
 
+        progress(total_groups, total_groups)
+        
         for group_key, icon_list in groups.items():
             resolutions = ", ".join(f"{icon['width']}x{icon['height']}@{icon['bit_count']}b" for icon in icon_list)
             log(f"Debug: Group {group_key}: {len(icon_list)} icons ({resolutions})")
