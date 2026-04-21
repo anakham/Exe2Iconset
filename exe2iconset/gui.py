@@ -22,6 +22,8 @@ class IconExtractorApp:
         self.selected_icons = []
         self.icon_series = {}
         self.selected_series_key = None
+        self.thumbnail_images = []
+        self.thumbnail_cache = {}
         
         self.create_widgets()
         self.check_requirements()
@@ -92,13 +94,16 @@ class IconExtractorApp:
         tree_frame.columnconfigure(0, weight=1)
         tree_frame.rowconfigure(0, weight=1)
         
-        self.icon_tree = ttk.Treeview(tree_frame, columns=("name", "count"), show="headings", selectmode="browse")
-        self.icon_tree.heading("name", text="Series Name")
-        self.icon_tree.heading("count", text="Icons")
-        self.icon_tree.column("name", width=350)
-        self.icon_tree.column("count", width=60)
+        self.icon_tree = ttk.Treeview(tree_frame, columns=("details",), selectmode="browse")
+        style = ttk.Style(self.root)
+        style.configure("Treeview", rowheight=130)
         
-        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.icon_tree.yview)
+        self.icon_tree.heading("#0", text="Icons Preview")
+        self.icon_tree.heading("details", text="Details")
+        self.icon_tree.column("#0", width=300, minwidth=300)
+        self.icon_tree.column("details", width=200, minwidth=200)
+        
+        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self._on_tree_scroll)
         self.icon_tree.configure(yscrollcommand=vsb.set)
         
         self.icon_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -118,6 +123,10 @@ class IconExtractorApp:
         self.status_text.grid(row=0, column=0, sticky=(tk.W, tk.E))
         
         main_frame.rowconfigure(3, weight=1)
+    
+    def _on_tree_scroll(self, *args):
+        self.icon_tree.yview(*args)
+        self.root.after(50, self._prepare_visible_thumbnails)
     
     def check_requirements(self):
         missing_tools = []
@@ -222,17 +231,69 @@ class IconExtractorApp:
         for item in self.icon_tree.get_children():
             self.icon_tree.delete(item)
         
+        self.thumbnail_cache = {}
+        self.thumbnail_images = []
+        
         for series_name, icon_data_list in self.icon_series.items():
             count = len(icon_data_list)
-            self.icon_tree.insert("", "end", values=(series_name, count))
+            
+            if icon_data_list:
+                parts = series_name.split('_')
+                id_part = parts[1] if len(parts) > 1 else "?"
+                lang_part = parts[2] if len(parts) > 2 else "?"
+                
+                sorted_icons = sorted(icon_data_list, key=lambda x: x.get('width', 0) * x.get('height', 0), reverse=True)
+                
+                # Group icons by resolution
+                by_res = {}
+                for icon in sorted_icons:
+                    w = icon.get('width', 0)
+                    h = icon.get('height', 0)
+                    cb = icon.get('bit_count', 0)
+                    if w and h and cb:
+                        key = f"{w}x{h}"
+                        if key not in by_res:
+                            by_res[key] = set()
+                        by_res[key].add(cb)
+                
+                res_parts = []
+                for res_key in by_res:
+                    bits = sorted(by_res[res_key], reverse=True)
+                    res = res_key.split('x')
+                    w = res[0]
+                    h = res[1]
+                    superscript = '²'
+                    if h == w:
+                        res_str = f"{w}{superscript}"
+                    else:
+                        res_str = f"{w}×{h}"
+                    if len(bits) == 1:
+                        res_parts.append(f"{res_str}×{bits[0]}bit")
+                    else:
+                        bits_str = ','.join(str(b) for b in bits)
+                        res_parts.append(f"{res_str}×{{{bits_str}}}bit")
+                
+                details = f"ID:{id_part}, LANG:{lang_part}, all:{', '.join(res_parts)}"
+                
+                self.thumbnail_cache[series_name] = icon_data_list
+                self.icon_tree.insert("", "end", iid=series_name, values=(details,))
+            else:
+                self.icon_tree.insert("", "end", iid=series_name, values=("No icons",))
+        
+        self.progress["maximum"] = total
+        self.progress["value"] = total
+        
+        self.icon_tree.bind("<Configure>", lambda e: self._prepare_visible_thumbnails())
+        self.root.after(100, self._prepare_visible_thumbnails)
         
         self.progress["maximum"] = total
         self.progress["value"] = total
         
         if total == 1:
+            first_key = list(self.icon_series.keys())[0]
             first_item = self.icon_tree.get_children()[0]
             self.icon_tree.selection_set(first_item)
-            self.selected_series_key = self.icon_tree.item(first_item, "values")[0]
+            self.selected_series_key = first_key
             self.log_status(f"Found 1 icon series. Click 'Convert' to create ICNS.")
         else:
             self.log_status(f"Found {len(self.icon_series)} icon series. Select one and click 'Convert'.")
@@ -240,9 +301,9 @@ class IconExtractorApp:
     def _on_tree_select(self, event):
         selection = self.icon_tree.selection()
         if selection:
-            item = selection[0]
-            series_name = self.icon_tree.item(item, "values")[0]
-            self.select_series(series_name)
+            item_id = selection[0]
+            self.select_series(item_id)
+            self._prepare_visible_thumbnails()
     
     def select_series(self, series_name):
         self.selected_series_key = series_name
@@ -272,6 +333,48 @@ class IconExtractorApp:
         thread = threading.Thread(target=self._create_icns_thread)
         thread.daemon = True
         thread.start()
+    
+    def _prepare_visible_thumbnails(self):
+        all_items = list(self.thumbnail_cache.keys())
+        
+        target_height = 130
+        
+        for item_id in all_items:
+            if self.icon_tree.item(item_id, "image"):
+                continue
+            
+            bbox = self.icon_tree.bbox(item_id)
+            if not bbox:
+                continue
+            
+            icon_data_list = self.thumbnail_cache[item_id]
+            
+            sorted_icons = sorted(icon_data_list, key=lambda x: x.get('width', 0) * x.get('height', 0), reverse=True)
+            
+            thumbnails = []
+            for icon in sorted_icons:
+                try:
+                    w, h = icon.get('width', 32), icon.get('height', 32)
+                    img = icon['image'].copy()
+                    if h > target_height:
+                        scale = target_height / h
+                        new_w, new_h = int(w * scale), target_height
+                        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                    thumbnails.append(img)
+                except:
+                    pass
+            
+            if thumbnails:
+                total_width = sum(t.width for t in thumbnails)
+                composite = Image.new('RGBA', (total_width, target_height), (0, 0, 0, 0))
+                x_offset = 0
+                for thumb in thumbnails:
+                    composite.paste(thumb, (x_offset, 0))
+                    x_offset += thumb.width
+                
+                photo = ImageTk.PhotoImage(composite)
+                self.thumbnail_images.append(photo)
+                self.icon_tree.item(item_id, image=photo)
     
     def _create_icns_thread(self):
         output_dir = self.output_dir.get()
