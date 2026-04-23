@@ -49,9 +49,9 @@ run_gui()
 
 #### GUI Workflow
 
-1. **Select EXE File**: Click "Browse..." to select a Windows executable (EXE, DLL, MUN)
-2. **Extract Icons**: Click "Extract Icons" to extract icon groups from the PE file. A progress bar shows extraction progress for files with 300+ icons.
-3. **Select Series**: Choose an icon series from the Treeview list. Thumbnails load lazily - only visible items are rendered for performance.
+1. **Select EXE File**: Click "Browse..." or enter path and press Enter
+2. **Extract Icons**: Extraction starts automatically after file selection. A progress bar shows extraction progress.
+3. **Select Series**: Choose an icon series from the Treeview list
 4. **Create ICNS**: Enter output name and click "Create ICNS"
 5. **Save Location**: ICNS file will be saved in the selected output directory
 
@@ -76,28 +76,12 @@ exe2iconset <file.exe> -g icongroup_47_1033 -o output.icns
 
 # Create ICNS with iconset directory for inspection
 exe2iconset <file.exe> -o output.icns --iconset
+
+# Verbose output for debugging
+exe2iconset <file.exe> -v
 ```
 
-#### CLI Examples
-
-```bash
-# List all icon groups in a file
-exe2iconset app.exe --list
-
-# Extract icons using the first available group
-exe2iconset app.exe -o app.icns
-
-# Extract from a specific group (shown in --list output)
-exe2iconset app.exe -g icongroup_3_1033 -o myapp.icns
-
-# Create iconset directory for manual inspection
-exe2iconset app.exe -o app.icns --iconset
-
-# Verbose output
-exe2iconset app.exe -o app.icns -v
-```
-
-#### CLI Options
+### CLI Options
 
 | Option | Description |
 |--------|-------------|
