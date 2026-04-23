@@ -272,6 +272,16 @@ Use `git commit --amend` ONLY when:
 - Were created by someone else
 - Are part of a published history
 
+**Commit Fix Options:**
+
+When you need to commit a small fix, ask human for one of these options:
+
+1. **Amend** - Add fix to the most recent commit (only if not pushed)
+2. **New commit** - Create separate commit, then wait for push approval  
+3. **Wait** - Don't commit yet, wait for human review first
+
+Use the `question` tool to ask for confirmation before proceeding.
+
 **Commands:**
 **IMPORTANT: Never push without explicit human approval. AI agent must wait for human to say "approved" or "go ahead" before executing any push command.**
 
