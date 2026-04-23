@@ -50,10 +50,17 @@ run_gui()
 #### GUI Workflow
 
 1. **Select EXE File**: Click "Browse..." to select a Windows executable (EXE, DLL, MUN)
-2. **Extract Icons**: Click "Extract Icons" to extract icon groups from the PE file
-3. **Select Series**: Choose an icon series from the list in Step 2
+2. **Extract Icons**: Click "Extract Icons" to extract icon groups from the PE file. A progress bar shows extraction progress for files with 300+ icons.
+3. **Select Series**: Choose an icon series from the Treeview list. Thumbnails load lazily - only visible items are rendered for performance.
 4. **Create ICNS**: Enter output name and click "Create ICNS"
 5. **Save Location**: ICNS file will be saved in the selected output directory
+
+The icon list shows compact details like `ID:101, LANG:1033, all:64²×32bit` where:
+- **ID**: Resource ID (e.g., 101)
+- **LANG**: Language code (e.g., 1033 = English)
+- **all**: All sizes in the group (e.g., 64²×32bit means 64x64 at 32-bit color)
+
+Click the status bar to view the full activity log in a popup window.
 
 ### CLI
 
