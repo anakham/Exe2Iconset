@@ -24,6 +24,7 @@ class IconExtractorApp:
         self.selected_series_key = None
         self.thumbnail_images = []
         self.thumbnail_cache = {}
+        self.log_messages = []
         
         self.create_widgets()
         self.check_requirements()
@@ -36,12 +37,8 @@ class IconExtractorApp:
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         
-        title_label = ttk.Label(main_frame, text="EXE to ICNS Converter", 
-                                font=("Arial", 16, "bold"))
-        title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
-        
         step1_frame = ttk.LabelFrame(main_frame, text="Step 1: Select Windows Executable", padding="10")
-        step1_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        step1_frame.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
         step1_frame.columnconfigure(1, weight=1)
         
         ttk.Label(step1_frame, text="EXE File:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
@@ -114,13 +111,16 @@ class IconExtractorApp:
         self.convert_btn = ttk.Button(step3_frame, text="Convert to ICNS", command=self.on_convert_click)
         self.convert_btn.grid(row=2, column=0, pady=(10, 0), sticky=(tk.W, tk.E))
         
-        status_frame = ttk.LabelFrame(main_frame, text="Status", padding="10")
-        status_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.log_messages = []
+        
+        status_frame = ttk.Frame(main_frame)
+        status_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 5))
         status_frame.columnconfigure(0, weight=1)
         
-        self.status_text = tk.Text(status_frame, height=6, width=80, state=tk.DISABLED, 
-                                   relief=tk.FLAT)
-        self.status_text.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        self.status_label = ttk.Label(status_frame, text="Ready", relief=tk.SUNKEN, 
+                                      anchor=tk.W, padding=(5, 2))
+        self.status_label.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        self.status_label.bind("<Button-1>", self._show_log_popup)
         
         main_frame.rowconfigure(3, weight=1)
     
@@ -428,12 +428,36 @@ class IconExtractorApp:
     
     def log_status(self, message):
         def update_status():
-            self.status_text.config(state=tk.NORMAL)
-            self.status_text.insert(tk.END, message + "\n")
-            self.status_text.see(tk.END)
-            self.status_text.config(state=tk.DISABLED)
+            self.log_messages.append(message)
+            self.status_label.config(text=message)
         
         self.root.after(0, update_status)
+    
+    def _show_log_popup(self, event):
+        if not self.log_messages:
+            return
+        
+        popup = tk.Toplevel(self.root)
+        popup.title("Log")
+        popup.geometry("600x400")
+        
+        text_frame = tk.Frame(popup)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+        
+        text = tk.Text(text_frame, wrap=tk.WORD)
+        text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        vsb = tk.Scrollbar(text_frame, orient=tk.VERTICAL, command=text.yview)
+        vsb.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        text.configure(yscrollcommand=vsb.set)
+        
+        text_frame.columnconfigure(0, weight=1)
+        text_frame.rowconfigure(0, weight=1)
+        
+        for msg in self.log_messages:
+            text.insert(tk.END, msg + "\n")
+        
+        text.config(state=tk.DISABLED)
 
 
 def run_gui():
