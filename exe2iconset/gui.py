@@ -1,10 +1,13 @@
 import os
-import struct
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk, ImageOps
-from io import BytesIO
+from PIL import Image, ImageTk
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+except ImportError:
+    TkinterDnD = None
+    DND_FILES = None
 
 from .core.extract import extract_icons_from_pe
 from .core.convert import convert_icons_to_icns_sizes, save_iconset
@@ -17,6 +20,8 @@ class IconExtractorApp:
         self.root.title("Windows EXE to macOS ICNS Converter")
         self.root.geometry("900x700")
         
+        self.dnd_available = TkinterDnD is not None
+        
         self.exe_path = tk.StringVar()
         self.output_dir = tk.StringVar()
         self.selected_icons = []
@@ -28,7 +33,41 @@ class IconExtractorApp:
         
         self.create_widgets()
         self.check_requirements()
-    
+        
+        if self.dnd_available:
+            self.setup_dnd()
+
+    def setup_dnd(self):
+        if not self.dnd_available:
+            return
+        
+        try:
+            if hasattr(self.step1_frame, 'drop_target_register'):
+                self.step1_frame.drop_target_register(DND_FILES)
+                self.step1_frame.dnd_bind('<<Drop>>', self._handle_drop)
+                self.log_status("Drag & drop is enabled. Drag files here.")
+        except Exception as e:
+            self.dnd_available = False
+            self.log_status(f"Drag & drop unavailable: {e}")
+
+    def _handle_drop(self, event):
+        files = self.root.tk.splitlist(event.data)
+        if files:
+            file_path = files[0]
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext in ('.exe', '.dll', '.mun'):
+                self.exe_path.set(file_path)
+                exe_dir = os.path.dirname(file_path)
+                exe_stem = os.path.splitext(os.path.basename(file_path))[0]
+                self.output_dir.set(exe_dir)
+                self.output_name.set(exe_stem)
+                self.update_output_preview()
+                self.log_status(f"Dropped file: {file_path}")
+                self.extract_icons()
+            else:
+                messagebox.showwarning("Unsupported File", 
+                    f"Unsupported file type: {ext}\nPlease drop an EXE, DLL, or MUN file.")
+
     def create_widgets(self):
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -40,6 +79,7 @@ class IconExtractorApp:
         step1_frame = ttk.LabelFrame(main_frame, text="Step 1: Select Windows Executable", padding="10")
         step1_frame.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
         step1_frame.columnconfigure(1, weight=1)
+        self.step1_frame = step1_frame
         
         ttk.Label(step1_frame, text="EXE File:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
         
@@ -129,21 +169,22 @@ class IconExtractorApp:
         self.root.after(50, self._prepare_visible_thumbnails)
     
     def check_requirements(self):
-        missing_tools = []
-        
         try:
             import pefile
         except ImportError:
-            missing_tools.append("pefile (Python package)")
+            messagebox.showerror("Missing Required Package", 
+                "pefile (Python package) is required.\nPlease install it: pip install pefile")
+            return
         
         try:
             Image.__version__
         except:
-            missing_tools.append("Pillow")
+            messagebox.showerror("Missing Required Package", 
+                "Pillow is required.\nPlease install it: pip install Pillow")
+            return
         
-        if missing_tools:
-            messagebox.showwarning("Missing Tools", 
-                f"The following tools are required:\n\n{chr(10).join(missing_tools)}\n\nPlease install them to use all features.")
+        if not self.dnd_available:
+            self.log_status("Drag & drop unavailable - use Browse button")
     
     def browse_exe(self):
         filename = filedialog.askopenfilename(
@@ -192,6 +233,7 @@ class IconExtractorApp:
         
         self.visible_items = []
         self.loaded_count = 0
+        self.progress["maximum"] = 100
         self.progress["value"] = 0
         
         self.selected_icons = []
@@ -460,8 +502,37 @@ class IconExtractorApp:
         text.config(state=tk.DISABLED)
 
 
+def _destroy_orphaned_tk_windows():
+    """Find and destroy any orphaned Tk windows that weren't assigned."""
+    import gc
+    
+    gc.collect()
+    for obj in gc.get_objects():
+        try:
+            if isinstance(obj, tk.Tk):
+                if obj.winfo_exists():
+                    obj.withdraw()
+                    obj.destroy()
+        except Exception:
+            pass
+
+
 def run_gui():
-    root = tk.Tk()
+    global TkinterDnD, DND_FILES
+    
+    root = None
+    
+    if TkinterDnD:
+        try:
+            root = TkinterDnD.Tk()
+        except Exception:
+            _destroy_orphaned_tk_windows()
+            TkinterDnD = None
+            DND_FILES = None
+            root = tk.Tk()
+    else:
+        root = tk.Tk()
+    
     app = IconExtractorApp(root)
     
     def on_closing():
