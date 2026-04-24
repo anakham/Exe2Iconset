@@ -150,3 +150,42 @@ pip install -e ".[dev]"
 # Run tests
 pytest tests/
 ```
+
+## Known Issues
+
+### Drag and Drop on macOS with Tcl/Tk 9.x
+
+If the GUI fails to start with an error like "RuntimeError: Unable to load tkdnd library" or "this extension is compiled for Tcl 8.x", this indicates a Tcl/Tk version incompatibility.
+
+**Problem**: tkinterdnd2's tkdnd extension is compiled for Tcl 8.x, but macOS with Homebrew may have Tcl/Tk 9.x linked by default.
+
+**Solution**: Download and replace tkdnd binaries with Tcl 9.x compatible ones:
+
+1. Download from https://github.com/petasis/tkdnd/releases:
+   - For Apple Silicon (M1/M2/M3): `tkdnd-2.9.5-macOS-tcl9.0-arm64-x64-14.2.1.tgz`
+   - For Intel Macs: `tkdnd-2.9.5-macOS-tcl9.0-x86_64-x64-14.2.1.tgz`
+
+2. Extract the archive and copy contents to your tkinterdnd2 installation:
+   ```bash
+   # Find your tkinterdnd2 location
+   python -c "import tkinterdnd2; print(tkinterdnd2.__file__)"
+   
+   # Navigate to tkdnd folder and replace files from the archive
+   # The archive contains osx-arm64/ or osx-x64/ folder with:
+   # - libtkdnd2.X.X.dylib (the binary)
+   # - pkgIndex.tcl
+   # - *.tcl files
+   ```
+
+Alternatively, try linking Tcl/Tk 8.x via Homebrew (may require rebuilding your virtual environment):
+```bash
+brew install tcl-tk@8
+brew unlink tcl-tk
+brew link tcl-tk@8
+```
+
+### Drag and Drop on Linux/Wayland
+
+On some Linux distributions running Wayland, drag-and-drop from file managers may work inconsistently (sometimes fires, sometimes doesn't). This is a known tkinterdnd2 limitation with Wayland's inter-app DnD protocol.
+
+**Workaround**: Use the "Browse..." button to select files, or try running with X11 session instead of Wayland.
