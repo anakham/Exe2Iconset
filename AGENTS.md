@@ -15,10 +15,12 @@ Exe2Iconset/
 │   ├── __main__.py           # Entry point for python -m exe2iconset
 │   ├── cli.py                # Command-line interface
 │   ├── gui.py                # Tkinter GUI application
+│   ├── gui_dialogs.py        # Custom dialogs (FilePicker)
 │   └── core/                 # Core modules
 │       ├── __init__.py
 │       ├── convert.py        # Icon conversion/resizing
-│       ├── extract.py        # PE file icon extraction
+│       ├── extract.py        # PE file icon extraction, unified extract_images()
+│       ├── images.py         # Image file/directory extraction
 │       └── icns.py           # ICNS file creation
 ├── tests/                    # Test suite (pytest)
 │   ├── conftest.py          # Shared pytest fixtures

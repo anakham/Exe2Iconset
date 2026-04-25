@@ -9,9 +9,11 @@ except ImportError:
     TkinterDnD = None
     DND_FILES = None
 
-from .core.extract import extract_icons_from_pe
+from .core.extract import extract_images, PE_EXTENSIONS
+from .core.images import detect_input_type, IMAGE_EXTENSIONS
 from .core.convert import convert_icons_to_icns_sizes, save_iconset
 from .core.icns import ICON_TYPE_MAP, create_icns_from_images
+from exe2iconset.gui_dialogs import FilePicker
 
 
 class IconExtractorApp:
@@ -22,7 +24,7 @@ class IconExtractorApp:
         
         self.dnd_available = TkinterDnD is not None
         
-        self.exe_path = tk.StringVar()
+        self.input_path = tk.StringVar()
         self.output_dir = tk.StringVar()
         self.selected_icons = []
         self.icon_series = {}
@@ -30,6 +32,7 @@ class IconExtractorApp:
         self.thumbnail_images = []
         self.thumbnail_cache = {}
         self.log_messages = []
+        self.input_type = None
         
         self.create_widgets()
         self.check_requirements()
@@ -53,20 +56,27 @@ class IconExtractorApp:
     def _handle_drop(self, event):
         files = self.root.tk.splitlist(event.data)
         if files:
-            file_path = files[0]
-            ext = os.path.splitext(file_path)[1].lower()
-            if ext in ('.exe', '.dll', '.mun'):
-                self.exe_path.set(file_path)
-                exe_dir = os.path.dirname(file_path)
-                exe_stem = os.path.splitext(os.path.basename(file_path))[0]
-                self.output_dir.set(exe_dir)
-                self.output_name.set(exe_stem)
-                self.update_output_preview()
-                self.log_status(f"Dropped file: {file_path}")
-                self.extract_icons()
-            else:
+            input_path = files[0]
+            in_type = detect_input_type(input_path)
+            if in_type == 'unknown':
                 messagebox.showwarning("Unsupported File", 
-                    f"Unsupported file type: {ext}\nPlease drop an EXE, DLL, or MUN file.")
+                    f"Unsupported file type. Please drop an EXE, DLL, MUN, or image file.")
+                return
+            
+            self.input_path.set(input_path)
+            
+            if os.path.isfile(input_path):
+                input_dir = os.path.dirname(input_path)
+                input_stem = os.path.splitext(os.path.basename(input_path))[0]
+            else:
+                input_dir = input_path
+                input_stem = os.path.basename(input_path)
+            
+            self.output_dir.set(input_dir)
+            self.output_name.set(input_stem)
+            self.update_output_preview()
+            self.log_status(f"Dropped: {input_path}")
+            self.extract_icons()
 
     def create_widgets(self):
         main_frame = ttk.Frame(self.root, padding="10")
@@ -76,18 +86,18 @@ class IconExtractorApp:
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         
-        step1_frame = ttk.LabelFrame(main_frame, text="Step 1: Select Windows Executable", padding="10")
+        step1_frame = ttk.LabelFrame(main_frame, text="Step 1: Select Input File", padding="10")
         step1_frame.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
         step1_frame.columnconfigure(1, weight=1)
         self.step1_frame = step1_frame
         
-        ttk.Label(step1_frame, text="EXE File:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+        ttk.Label(step1_frame, text="Input File:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
         
-        exe_entry = ttk.Entry(step1_frame, textvariable=self.exe_path, width=50)
-        exe_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 5))
-        exe_entry.bind('<Return>', lambda e: self.extract_icons())
+        input_entry = ttk.Entry(step1_frame, textvariable=self.input_path, width=50)
+        input_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 5))
+        input_entry.bind('<Return>', lambda e: self.extract_icons())
         
-        ttk.Button(step1_frame, text="Browse...", command=self.browse_exe).grid(row=0, column=2)
+        ttk.Button(step1_frame, text="Browse...", command=self.browse_input).grid(row=0, column=2, padx=(2, 0))
         
         self.output_name = tk.StringVar(value="appicon")
         self.save_icns = tk.BooleanVar(value=True)
@@ -131,9 +141,10 @@ class IconExtractorApp:
         tree_frame.columnconfigure(0, weight=1)
         tree_frame.rowconfigure(0, weight=1)
         
-        self.icon_tree = ttk.Treeview(tree_frame, columns=("details",), selectmode="browse")
-        style = ttk.Style(self.root)
-        style.configure("Treeview", rowheight=130)
+        tv_style = ttk.Style(self.root)
+        tv_style.configure("Icons.Treeview", rowheight=130)
+
+        self.icon_tree = ttk.Treeview(tree_frame, columns=("details",), selectmode="browse", style="Icons.Treeview")
         
         self.icon_tree.heading("#0", text="Icons Preview")
         self.icon_tree.heading("details", text="Details")
@@ -186,21 +197,30 @@ class IconExtractorApp:
         if not self.dnd_available:
             self.log_status("Drag & drop unavailable - use Browse button")
     
-    def browse_exe(self):
-        filename = filedialog.askopenfilename(
-            title="Select Windows File with Resources",
-            filetypes=[("Windows files with resources", "*.exe *.dll *.mun"), ("All files", "*.*")]
-        )
-        if filename:
-            self.exe_path.set(filename)
+    def browse_input(self):
+        filetypes = [
+            ("All supported", f"{' '.join(f'*{ext}' for ext in sorted(PE_EXTENSIONS | IMAGE_EXTENSIONS))}"),
+            ("PE files", " ".join(f"*{ext}" for ext in sorted(PE_EXTENSIONS))),
+            ("Image files", " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTENSIONS))),
+        ]
+        
+        picker = FilePicker(self.root, title="Select Input File or Folder", filetypes=filetypes)
+        result = picker.go()
+        
+        if result:
+            self.input_path.set(result)
             
-            exe_dir = os.path.dirname(filename)
-            exe_stem = os.path.splitext(os.path.basename(filename))[0]
-            self.output_dir.set(exe_dir)
-            self.output_name.set(exe_stem)
+            if os.path.isfile(result):
+                input_dir = os.path.dirname(result)
+                input_stem = os.path.splitext(os.path.basename(result))[0]
+                self.output_dir.set(input_dir)
+                self.output_name.set(input_stem)
+            else:
+                self.output_dir.set(result)
+                self.output_name.set(os.path.basename(result))
+            
             self.update_output_preview()
-            
-            self.log_status(f"Selected file: {filename}")
+            self.log_status(f"Selected: {result}")
             self.extract_icons()
     
     def browse_output_dir(self):
@@ -224,8 +244,13 @@ class IconExtractorApp:
             self.output_preview.config(text=preview_text)
     
     def extract_icons(self):
-        if not self.exe_path.get():
-            messagebox.showerror("Error", "Please select an EXE file first")
+        if not self.input_path.get():
+            messagebox.showerror("Error", "Please select an input file first")
+            return
+        
+        self.input_type = detect_input_type(self.input_path.get())
+        if self.input_type == 'unknown':
+            messagebox.showerror("Error", "Unsupported input file type")
             return
         
         for item in self.icon_tree.get_children():
@@ -244,20 +269,20 @@ class IconExtractorApp:
         thread.start()
     
     def _extract_icons_thread(self):
-        self.log_status("Extracting icons from PE resources...")
-        
         def progress_callback(current, total):
             self.root.after(0, lambda c=current, t=total: self.progress.config(value=c * 100 // t))
         
         try:
-            icon_files = extract_icons_from_pe(self.exe_path.get(), self.log_status, progress_callback)
+            self.log_status("Loading images...")
+            icon_files = extract_images(self.input_path.get(), self.log_status, progress_callback)
+            
             if not icon_files:
-                self.log_status("No icons found in the PE resources.")
+                self.log_status("No images found.")
                 self.root.after(0, lambda: self.progress.config(value=0))
                 return
 
             self.icon_series = icon_files
-            self.log_status(f"Extracted {len(self.icon_series)} icon groups from PE resources.")
+            self.log_status(f"Found {len(self.icon_series)} image groups.")
 
             self.display_icons()
             return

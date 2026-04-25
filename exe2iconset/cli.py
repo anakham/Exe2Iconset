@@ -6,7 +6,7 @@ import os
 import sys
 
 from exe2iconset import (
-    extract_icons_from_pe,
+    extract_images,
     convert_icons_to_icns_sizes,
     save_iconset,
     create_icns_from_images,
@@ -15,15 +15,15 @@ from exe2iconset import (
 
 
 def list_groups(file_path, verbose=False):
-    """List available icon groups in a PE file."""
+    """List available icon groups in a file or directory."""
     def log(msg):
         if verbose:
             print(msg)
     
-    icon_groups = extract_icons_from_pe(file_path, log)
+    icon_groups = extract_images(file_path, log)
     
     if not icon_groups:
-        print("No icon groups found in file.")
+        print("No icon groups found.")
         return None
     
     print(f"Available icon groups in {os.path.basename(file_path)}:")
@@ -40,12 +40,12 @@ def main():
     parser.add_argument(
         "input",
         nargs="?",
-        help="Path to EXE, DLL, or MUN file",
+        help="Path to EXE, DLL, MUN, image file, or directory",
     )
     parser.add_argument(
         "-l", "--list",
         action="store_true",
-        help="List available icon groups and exit",
+        help="List available icon groups and exit (PE files only)",
     )
     parser.add_argument(
         "-g", "--group",
@@ -70,12 +70,9 @@ def main():
     
     args = parser.parse_args()
     
-    if args.list:
-        if not args.input:
-            print("Error: --list requires an input file", file=sys.stderr)
-            return 1
-        list_groups(args.input, args.verbose)
-        return 0
+    def log(msg):
+        if args.verbose:
+            print(msg)
     
     if not args.input:
         parser.print_help()
@@ -85,19 +82,20 @@ def main():
         print(f"Error: File not found: {args.input}", file=sys.stderr)
         return 1
     
-    def log(msg):
-        if args.verbose:
-            print(msg)
+    # Handle list command - show groups for any input type
+    if args.list:
+        list_groups(args.input, args.verbose)
+        return 0
     
-    log(f"Extracting icons from {args.input}...")
-    
-    icon_groups = extract_icons_from_pe(args.input, log)
+    # Extract icons/images
+    log(f"Loading from {args.input}...")
+    icon_groups = extract_images(args.input, log)
     
     if not icon_groups:
-        print("Error: No icons found in file", file=sys.stderr)
+        print("Error: No images found", file=sys.stderr)
         return 1
     
-    # Select icon group
+    # Select icon group (only relevant for PE files)
     if args.group:
         if args.group not in icon_groups:
             print(f"Error: Icon group '{args.group}' not found.", file=sys.stderr)
