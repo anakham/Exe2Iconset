@@ -1,6 +1,6 @@
 # Exe2Iconset
 
-Cross-platform tool to extract icons from Windows EXE/DLL files and create macOS ICNS files.
+Cross-platform tool to extract icons from Windows EXE/DLL files, image files, or directories and create macOS ICNS files.
 
 ## Installation
 
@@ -49,7 +49,7 @@ run_gui()
 
 #### GUI Workflow
 
-1. **Select EXE File**: Click "Browse..." or enter path and press Enter
+1. **Select Input File**: Click "Browse..." or enter path and press Enter
 2. **Extract Icons**: Extraction starts automatically after file selection. A progress bar shows extraction progress.
 3. **Select Series**: Choose an icon series from the Treeview list
 4. **Create ICNS**: Enter output name and click "Create ICNS"
@@ -71,8 +71,11 @@ exe2iconset <file.exe> --list
 # Or with python -m
 python -m exe2iconset <file.exe> --list
 
-# Create ICNS from specific group
+# Create ICNS from specific group (PE files)
 exe2iconset <file.exe> -g icongroup_47_1033 -o output.icns
+
+# Create ICNS from image file
+exe2iconset <image.png> -o output.icns
 
 # Create ICNS with iconset directory for inspection
 exe2iconset <file.exe> -o output.icns --iconset
@@ -94,14 +97,21 @@ exe2iconset <file.exe> -v
 ## Python API
 
 ```python
-from exe2iconset import extract_icons_from_pe, create_icns_from_images, convert_icons_to_icns_sizes, ICON_TYPE_MAP
+from exe2iconset import extract_images, create_icns_from_images, convert_icons_to_icns_sizes, ICON_TYPE_MAP
 
-# Extract icons from PE file
-icon_groups = extract_icons_from_pe("app.exe")
+# Extract icons/images from PE file, image file, or directory
+# Returns dict mapping group name to list of icon dicts
+icon_groups = extract_images("app.exe")        # PE file
+icon_groups = extract_images("image.png")      # Single image
+icon_groups = extract_images("images/")        # Directory
 
-# Convert extracted icons to PIL images with resolutions, sutable for ICNS
+# Get the first group (or specific group by name)
+first_group_key = list(icon_groups.keys())[0]
+icon_data_list = icon_groups[first_group_key]
+
+# Convert extracted icons to PIL images with resolutions, suitable for ICNS
 mac_icon_sizes = list(ICON_TYPE_MAP.keys())
-convert_icons_to_icns_sizes(icon_data_list, mac_icon_sizes)
+icon_images = convert_icons_to_icns_sizes(icon_data_list, mac_icon_sizes)
 
 # Create ICNS from images
 create_icns_from_images(icon_images, "app.icns")

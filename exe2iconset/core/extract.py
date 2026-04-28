@@ -1,3 +1,4 @@
+import os
 import struct
 from io import BytesIO
 from PIL import Image
@@ -7,6 +8,17 @@ try:
     import pefile
 except ImportError:
     pefile = None
+
+
+PE_EXTENSIONS = {'.exe', '.dll', '.mun'}
+
+
+def is_pe_file(path):
+    """Check if path is a PE file."""
+    if not os.path.exists(path):
+        return False
+    ext = os.path.splitext(path)[1].lower()
+    return ext in PE_EXTENSIONS
 
 
 def _extract_resources_by_type(pe, resource_type_id, logger=None):
@@ -249,3 +261,22 @@ def extract_icons_from_pe(file_path, logger=None, progress_callback=None):
     except Exception as e:
         log(f"PE icon extraction failed: {str(e)}")
         return {}
+
+
+def extract_images(path, logger=None, progress_callback=None):
+    """Extract images from any supported input type.
+    
+    Args:
+        path: Path to PE file, image file, or directory
+        logger: Optional logging callback
+        progress_callback: Optional progress(current, total) callback
+    
+    Returns:
+        Dict mapping group keys to list of icon dicts
+    """
+    from .images import extract_images_from_files
+    
+    if is_pe_file(path):
+        return extract_icons_from_pe(path, logger, progress_callback)
+    else:
+        return extract_images_from_files(path, logger, progress_callback)
