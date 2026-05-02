@@ -1,0 +1,113 @@
+#!/bin/bash
+# Helper script for building and testing Exe2Iconset app bundle on macOS VM
+#
+# Usage:
+#   ./build_and_test                    # Build and test on fresh install
+#   ./build_and_test --clean              # Clean build
+#   ./build_and_test --package dmg       # Build with DMG creation
+#   ./build_and_test --no-test            # Build only, don't test
+#   ./build_and_test --no-copy-local      # Don't copy to local machine
+#
+# Options:
+#   --clean         Clean build directory before building
+#   --package TYPE  Create package (dmg, zip, appimage)
+#   --no-test       Skip testing on fresh install
+#   --no-copy-local Skip copying app to local machine
+
+set -ex
+
+# Show help if requested
+if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+    head -15 "$0"
+    exit 0
+fi
+
+# Configuration
+PROJECT_DIR='~/Projects/Exe2Iconset'
+LOCAL_DIR="$HOME/Projects/Exe2Iconset"
+VM_HOST="mac_hs_vm"
+
+echo "Starting build and test process for Exe2Iconset app bundle on macOS VM..."
+echo "Project directory on VM: $PROJECT_DIR"
+echo "Local project directory: $LOCAL_DIR"
+echo "VM host: $VM_HOST"
+echo "HOME=$HOME"
+
+# Parse arguments
+BUILD_CLEAN=false
+BUILD_PACKAGE=""
+TEST_FRESH=true
+COPY_LOCAL=true
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --clean)
+            BUILD_CLEAN=true
+            shift
+            ;;
+        --package)
+            BUILD_PACKAGE="$2"
+            shift 2
+            ;;
+        --no-test)
+            TEST_FRESH=false
+            shift
+            ;;
+        --no-copy-local)
+            COPY_LOCAL=false
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# Step 1: Activate development snapshot
+echo "=== Step 1: Activating development snapshot ==="
+bash "$LOCAL_DIR/scripts/vmware_dev_helpers/activate_dev_env"
+
+# Step 2: Sync repository to VM (excluding .git and using .gitignore)
+echo "=== Step 2: Syncing repository to VM ==="
+rsync -av --exclude='.git/' --filter=':- .gitignore' "$LOCAL_DIR/" "$VM_HOST:$PROJECT_DIR/"
+
+# Step 3: Build the app
+echo "=== Step 3: Building the app ==="
+BUILD_ARGS=""
+if [ "$BUILD_CLEAN" = true ]; then
+    BUILD_ARGS="--clean"
+fi
+if [ -n "$BUILD_PACKAGE" ]; then
+    BUILD_ARGS="$BUILD_ARGS --package $BUILD_PACKAGE"
+fi
+ssh "$VM_HOST" "cd $PROJECT_DIR && bash -l -c 'python3 scripts/build_app.py $BUILD_ARGS'"
+
+# Step 4: Copy to local machine
+if [ "$COPY_LOCAL" = true ]; then
+    echo "=== Step 4: Copying build artifacts to local machine ==="
+    # Use --delete to remove old files and avoid duplication (symlinks becoming real files)
+    rsync -av --delete "$VM_HOST:$PROJECT_DIR/dist/Exe2Iconset.app" "$LOCAL_DIR/dist/"
+    # Also copy DMG if it was created
+    if [ -n "$BUILD_PACKAGE" ]; then
+        rsync -av --delete "$VM_HOST:$PROJECT_DIR/dist/"*.dmg "$LOCAL_DIR/dist/" 2>/dev/null || true
+    fi
+fi
+
+# Step 5: Test on Fresh Install
+if [ "$TEST_FRESH" = true ]; then
+    echo "=== Step 5: Testing on Fresh Install ==="
+    bash "$LOCAL_DIR/scripts/vmware_dev_helpers/activate_clean_state"
+    
+    # Copy to VM Downloads
+    rsync -av "$LOCAL_DIR/dist/Exe2Iconset.app" "$VM_HOST:~/Downloads/"
+    
+    # Launch and check if running
+    ssh "$VM_HOST" "open ~/Downloads/Exe2Iconset.app"
+    sleep 3
+    ssh "$VM_HOST" "pgrep -fl Exe2Iconset"
+    
+    echo "=== Test complete ==="
+fi
+
+echo "=== All steps completed ==="

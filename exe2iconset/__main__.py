@@ -1,21 +1,17 @@
+#!/usr/bin/env python3
+"""Entry point for python -m exe2iconset and for PyInstaller bundle."""
+
 import sys
-import argparse
 from exe2iconset.gui import run_gui
 from exe2iconset.cli import main as cli_main
 
 
 def main():
-    """Entry point for python -m exe2iconset."""
-    # Check for --gui flag first
-    if '--gui' in sys.argv:
-        sys.argv.remove('--gui')
-        run_gui()
-    elif len(sys.argv) > 1 and sys.argv[1] == '--gui':
-        sys.argv[1] = ''
-        run_gui()
-    else:
-        # Run CLI
+    """Hybrid entry point: runs GUI by default, CLI if arguments provided."""
+    if len(sys.argv) > 1:
         sys.exit(cli_main())
+    else:
+        run_gui()
 
 
 if __name__ == "__main__":
