@@ -162,6 +162,24 @@ gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Yo
 
 ### Updating PR Description
 
+**Note**: `gh pr edit` may be deprecated. Use GraphQL instead:
+
+```bash
+# First, get PR node ID:
+PR_ID=$(gh api graphql -f query='{repository(owner:"OWNER",name:"REPO"){pullRequest(number:N){id}}}' --jq '.data.repository.pullRequest.id')
+
+# Update PR body via GraphQL:
+gh api graphql -f query='mutation {
+  updatePullRequest(input: {
+    pullRequestId: "PR_ID",
+    body: "New description text"
+  }) {
+    pullRequest { body }
+  }
+}'
+```
+
+Alternatively, use REST:
 ```bash
 gh api repos/OWNER/REPO/pulls/N -X PATCH -F body="New description text"
 ```

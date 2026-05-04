@@ -50,7 +50,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: exe2iconset-${{ matrix.platform }}-${{ matrix.arch }}
-          path: dist/
+          path: |
+            dist/*.dmg
+            dist/*.zip
           retention-days: 5
 
   assemble:

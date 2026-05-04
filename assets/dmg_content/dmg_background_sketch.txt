@@ -1,0 +1,20 @@
+                           Installation guide
+                            ------------------
+
+___________________                                   ___________________
+| Exe2Iconset.app |   1. Put Exe2Iconset.app to       | App shortcut    | 
+| placeholder     |  ------------------------------>  | placeholder     |
+|_________________|   Applications                    |_________________|
+                                                      ___________________
+                   2. Open file "Exit Quarantine.txt" | txt file        | 
+                   and press CMD+A, CMD+C to Put      | placeholder     |
+                   terminal command to buffer         |_________________|
+                                                      ___________________
+                   3. Open Terminal, paste command    | Terminal.app    |     |
+                   CMD+V, press enter                 | shortcut        | 
+                                                      | placeholder     |
+                                                      |_________________|
+                                                          
+                   4. Application should run. Follow
+                   this instruction only if you trust this bundle
+                   (same package available as pip install exe2iconset)

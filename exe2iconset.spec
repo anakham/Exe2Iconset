@@ -66,7 +66,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=(_target != 'macos'),
+    console=False,
     icon=str(_icon_path) if _icon_path else None,
     disable_windowed_traceback=False,
     argv_emulation=False,

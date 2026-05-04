@@ -152,17 +152,41 @@ def create_dmg(app_path: Path, output_dir: Path):
     if dmg_path.exists():
         dmg_path.unlink()
 
+    # Get background image and additional files
+    background_img = PROJECT_DIR / 'build' / 'dmg_content' / 'dmg_background.png'
+    quarantine_txt = PROJECT_DIR / 'assets' / 'dmg_content' / 'Exit Quarantine.txt'
+    terminal_app = PROJECT_DIR / 'assets' / 'dmg_content' / 'Terminal.app'
+    
     print(f"Creating DMG: {dmg_path}...")
-    result = subprocess.run([
+    
+    # Build create-dmg command
+    cmd = [
         "create-dmg",
         "--volname", "Exe2Iconset",
-        "--window-pos", "200", "200",
-        "--window-size", "600", "400",
-        "--icon-size", "100",
-        "--app-drop-link", "425", "185",
-        str(dmg_path),
-        str(app_path)
-    ])
+        "--window-pos", "200", "120",
+        "--window-size", "480", "500",
+        "--icon-size", "72",
+        "--icon", "Exe2Iconset.app", "64", "110",
+        "--text-size", "10",
+        "--app-drop-link", "380", "110",
+    ]
+    
+    # Add Exit Quarantine.txt file
+    if quarantine_txt.exists():
+        cmd.extend(["--add-file", "Exit Quarantine.txt", str(quarantine_txt), "380", "210"])
+    
+    # Add Terminal.app shortcut (check symlink, not target, since /System/Applications only exists on 10.15+)
+    if terminal_app.is_symlink():
+        cmd.extend(["--add-file", "Terminal.app", str(terminal_app), "380", "310"])
+    
+    # Add background if available
+    if background_img.exists():
+        cmd.extend(["--background", str(background_img)])
+    
+    # Add output path and source app
+    cmd.extend([str(dmg_path), str(app_path)])
+    
+    result = subprocess.run(cmd)
 
     if result.returncode != 0:
         print("WARNING: Failed to create DMG, falling back to ZIP")
@@ -258,6 +282,15 @@ def main():
 
     # Package
     output_dir = PROJECT_DIR / "dist"
+
+    # Generate DMG background for macOS
+    if package_type == 'dmg' and target_platform == 'macos':
+        print("Generating DMG background...")
+        bg_script = PROJECT_DIR / 'assets' / 'dmg_content' / 'generate_dmg_background.py'
+        if bg_script.exists():
+            result = subprocess.run([str(get_venv_python()), str(bg_script)])
+            if result.returncode != 0:
+                print("WARNING: Failed to generate background", file=sys.stderr)
 
     if package_type == "zip":
         create_zip(app_path, output_dir)
