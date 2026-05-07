@@ -1,0 +1,78 @@
+name: Build Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag (e.g., v0.2.0)'
+        required: false
+        type: string
+  pull_request:
+    branches: [main, feature/**]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            platform: macos
+            arch: x86_64
+          - os: macos-latest
+            platform: macos
+            arch: arm64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x86_64
+          - os: windows-latest
+            platform: windows
+            arch: x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install create-dmg (macOS only)
+        if: matrix.platform == 'macos'
+        run: brew install create-dmg
+
+      - name: Build app with build_app.py
+        run: python scripts/build_app.py --platform ${{ matrix.platform }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe2iconset-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          retention-days: 5
+
+  assemble:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'release'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: exe2iconset-*
+          path: artifacts/
+          merge-multiple: true
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          body: ${{ github.event.release.body }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

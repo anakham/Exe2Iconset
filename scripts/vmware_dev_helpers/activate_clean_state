@@ -1,0 +1,12 @@
+#!/bin/bash
+# This script is used to activate the clean state for the VMware testing environment.
+
+set -ex
+
+vmrun="/Applications/VMware\ Fusion.app/Contents/Public/vmrun"
+
+echo "Activating clean state for VMware testing environment..."
+ssh mac-vm-host "$vmrun revertToSnapshot \$HOME/Virtual\ Machines.localized/macOS\ 10.13\ High\ Sierra.vmwarevm/ Fresh\ Install"
+echo "Clean state activated. Starting the VMware testing environment."
+ssh mac-vm-host "$vmrun start \$HOME/Virtual\ Machines.localized/macOS\ 10.13\ High\ Sierra.vmwarevm/"
+echo "VMware testing environment is now running with a clean state."

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "exe2iconset"
-version = "0.1.1"
+version = "0.2.0"
 description = "Extract icons from Windows EXE/DLL files and create macOS ICNS files"
 readme = "README.md"
 license = {text = "MIT"}
@@ -38,6 +38,7 @@ keywords = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "pyinstaller>=6.0.0",
 ]
 
 [project.scripts]

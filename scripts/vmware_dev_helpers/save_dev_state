@@ -1,0 +1,12 @@
+#!/bin/bash
+# This script is used save VMWare environment as snapshot.
+
+set -ex
+
+vmrun="/Applications/VMware\ Fusion.app/Contents/Public/vmrun"
+
+echo "Deleting old snapshot..."
+ssh mac-vm-host "$vmrun deleteSnapshot \$HOME/Virtual\ Machines.localized/macOS\ 10.13\ High\ Sierra.vmwarevm/ PyInstallerDevelopment"
+echo "Old snapshot deleted. Creating new snapshot..."
+ssh mac-vm-host "$vmrun createSnapshot \$HOME/Virtual\ Machines.localized/macOS\ 10.13\ High\ Sierra.vmwarevm/ PyInstallerDevelopment"
+echo "New snapshot created."

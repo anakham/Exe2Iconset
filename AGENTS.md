@@ -22,11 +22,26 @@ Exe2Iconset/
 │       ├── extract.py        # PE file icon extraction, unified extract_images()
 │       ├── images.py         # Image file/directory extraction
 │       └── icns.py           # ICNS file creation
+├── scripts/                   # Build and development scripts
+│   ├── build_app.py          # Cross-platform build script
+│   └── vmware_dev_helpers/   # VM automation scripts
+├── assets/                    # Icons and build assets
+│   ├── icon/                 # App icons (.icns, .ico)
+│   └── dmg_content/          # DMG files and assets
+│       ├── generate_dmg_background.py  # DMG background generator
+│       ├── Exit Quarantine.txt
+│       └── Terminal.app -> /System/Applications/Utilities/Terminal.app
 ├── tests/                    # Test suite (pytest)
 │   ├── conftest.py          # Shared pytest fixtures
 │   ├── test_convert.py
 │   ├── test_extract.py
 │   └── test_icns.py
+├── .github/workflows/        # CI/CD workflows
+│   ├── build-release.yml    # Build and release workflow
+│   ├── publish.yml          # PyPI publish workflow
+│   └── test.yml             # Test workflow
+├── exe2iconset.spec         # PyInstaller spec file
+├── BUILD.md                 # Build instructions
 ├── sessions/                 # Session logs for context
 └── README.md
 ```
@@ -162,6 +177,24 @@ gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Yo
 
 ### Updating PR Description
 
+**Note**: `gh pr edit` may be deprecated. Use GraphQL instead:
+
+```bash
+# First, get PR node ID:
+PR_ID=$(gh api graphql -f query='{repository(owner:"OWNER",name:"REPO"){pullRequest(number:N){id}}}' --jq '.data.repository.pullRequest.id')
+
+# Update PR body via GraphQL:
+gh api graphql -f query='mutation {
+  updatePullRequest(input: {
+    pullRequestId: "PR_ID",
+    body: "New description text"
+  }) {
+    pullRequest { body }
+  }
+}'
+```
+
+Alternatively, use REST:
 ```bash
 gh api repos/OWNER/REPO/pulls/N -X PATCH -F body="New description text"
 ```
