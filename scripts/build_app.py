@@ -143,7 +143,7 @@ def create_dmg(app_path: Path, output_dir: Path):
     check_result = subprocess.run(["which", "create-dmg"], capture_output=True)
     if check_result.returncode != 0:
         print("WARNING: create-dmg not found, falling back to ZIP")
-        return create_zip(app_path, output_dir)
+        return create_zip(app_path, output_dir, 'macos')
 
     dmg_name = f"Exe2Iconset-{platform.machine()}.dmg"
     dmg_path = output_dir / dmg_name
@@ -195,11 +195,13 @@ def create_dmg(app_path: Path, output_dir: Path):
     print(f"DMG created: {dmg_path}")
 
 
-def create_zip(app_path: Path, output_dir: Path):
+def create_zip(app_path: Path, output_dir: Path, platform: str = None):
     """Create ZIP from app bundle or directory."""
     import zipfile
 
-    if app_path.suffix == '.app':
+    if platform:
+        zip_name = f"Exe2Iconset-{platform}.zip"
+    elif app_path.suffix == '.app':
         zip_name = f"{app_path.stem}.zip"
     else:
         zip_name = f"{app_path.name}-portable.zip"
@@ -293,7 +295,7 @@ def main():
                 print("WARNING: Failed to generate background", file=sys.stderr)
 
     if package_type == "zip":
-        create_zip(app_path, output_dir)
+        create_zip(app_path, output_dir, target_platform)
     elif package_type == "dmg":
         create_dmg(app_path, output_dir)
     elif package_type == "appimage":
