@@ -71,7 +71,7 @@ Detailed description of these stages is presented in the next paragraphs.
     - projects list: `gh project list --owner USERNAME` where USERNAME in the scope of this project is anakham.
     - project setting: `gh api graphql -f query='mutation { addProjectV2ItemById(input: { projectId: "PROJECT_ID", contentId: "ISSUE_NODE_ID" }) { clientMutationId } }'` where PROJECT_ID from `gh project list --owner USERNAME` and ISSUE_NODE_ID from `gh issue view N --json id`
     - milestone setting: `gh issue edit N --milestone "MilestoneName"`
-2. **Task Planing**. If scope of issue is large then it could be divided into subissues. After creating subissues return to 1. Commands for:
+2. **Task Planning**. If scope of issue is large then it could be divided into subissues. After creating subissues return to 1. Commands for:
     - issue creation: `gh issue create --title "Title" --body "Description" [--milestone "MilestoneName"] [--label "label"] [--assignee @me]` (Note: project setting must be done separately after creation via project/milestone setting command)
     - setting sub-issue relationship: `gh api graphql -f query='mutation { addSubIssue(input: { issueId: "PARENT_ISSUE_ID", subIssueId: "SUB_ISSUE_ID" }) { subIssue { id number title } } }'` where PARENT_ISSUE_ID from `gh issue view N --json id` and SUB_ISSUE_ID from `gh issue view M --json id`
 3. **Start implementation**. AI agent sets issue assignee (human or himself). Proceed to **Code Development**. Command for:
@@ -84,14 +84,15 @@ Detailed description of these stages is presented in the next paragraphs.
     - branch creation: `git checkout -b [feature|bug]/issue-<issue_number>-<concise-branch-name>`, format of branch name: `[feature|bug]/issue-<issue_number>-<concise-branch-name>`
 6. **Run Tests**. Command for:
     - running tests: `PYTHONPATH=. pytest tests/`
-7. **Precommit Review**. Reviewers examines changes and make remarks. Them can also propose changes to code and documents in working copy. Asignee takes that remarks into consideration and makes or accepts necessary changes. If asked assignee makes intermidiate local commits (with amend if it is not first commit and fix were minor) for better track remark fixes and do them iteratively by small steps and not all at once. Commands for:
+7. **Precommit Review**. Reviewers examines changes and make remarks. Them can also propose changes to code and documents in working copy. Assignee takes that remarks into consideration and makes or accepts necessary changes. Commands for:
     - viewing what's changed: `git diff` or `git diff <file>`
-    - amend commit: `git commit --amend`
-8. **Commit approval**. If reviewer confirms commit is ready, assignee do final commit with summary in commit message. Command for:
-    - final commit: `git add <files> && git commit [--amend] -m "message"`
-9. **Commit message review**. Before making push to git, commit message should be reviewed by reviewer. If were are remarks for commit message, they should be fixed by assignee and amended. Command for:
-    - commit message amend: `git commit --amend -m "New message"`
-10. **Push Approval**. All git push commands should be explicitly approved by human, AI agent can not do it automatically. After push, proceed to **Code Review** section. Commands for:
+8. **Commit approval**. AI agent must ALWAYS ask for explicit human approval before making any commit (including intermediate/fix commits). Use the `question` tool to ask. Only after human explicitly approves, proceed with the commit. Use `git commit --amend` ONLY when: (1) created by you this session, (2) not yet pushed, (3) small fix needed. NEVER amend commits that were pushed, created by others, or are published. For a small fix, ask human: amend, new commit, or wait. Commands for:
+    - final commit: `git add <files> && git commit -m "message"`
+    - amend (add files): `git add <files> && git commit --amend --no-edit`
+    - amend (change message): `git commit --amend -m "New message"`
+    - amend (bare): `git commit --amend`
+9. **Commit message review**. Commit message should be reviewed before push. If there are remarks, amend the message (see step 8 for amend commands).
+10. **Push Approval**. All git push commands require explicit human approval. AI agent must use the `question` tool to ask for approval. Only proceed with push when human responds with "push approved". After push, proceed to **Code Review** section. Commands for:
     - first push (when branch doesn't exist on remote): `git push -u origin branch-name`
     - subsequent push: `git push`
 
@@ -103,233 +104,43 @@ Detailed description of these stages is presented in the next paragraphs.
     - set pull request milestone: `gh api graphql -f query='mutation { updatePullRequest(input: { pullRequestId: "PR_NODE_ID", milestoneId: "MILESTONE_NODE_ID" }) { clientMutationId } }'` where MILESTONE_NODE_ID from `gh api repos/OWNER/REPO/milestones/N --jq '.node_id'`
     - set pull request assignee: `gh api graphql -f query='mutation { addAssigneesToAssignable(input: { assignableId: "PR_NODE_ID", assigneeIds: ["USER_ID"] }) { clientMutationId } }'` where USER_ID from `gh api graphql -f query='{user(login: "USERNAME") { id } }'`
     - set pull request reviewer: `gh api graphql -f query='mutation { requestReviews(input: { pullRequestId: "PR_NODE_ID", userIds: ["USER_ID"] }) { clientMutationId } }'` where USER_ID from `gh api graphql -f query='{user(login: "USERNAME") { id } }'` (Note: PR creator cannot be a reviewer - use a different account)
-12. **PR Remarks**. Reviewer makes remarks and places them at the corespondent lines of code. If reviewer is AI agent then command for:
-    - place first level comments in PR: `gh api repos/OWNER/REPO/pulls/N/comments -X POST -F body="Comment" -F commit_id=COMMIT_SHA -F path=FILENAME -F line=LINE -F side=RIGHT`
-14. **PR Resolve Remarks**. Assignee reads remarks and for all of unresolved either prepares necessary code changes (going back to **Code Development** stage) or if solving problems pointed by reviewer is hard and requires massive changes of code then new issue should be created for that by assignee. Whether it is the case, human should decide and confirm issue creation. In case issue is created, its link should be placed in the reply to the source reply comment. In case of code changes, small reply to reviewer comment with fix summary should be placed. Commands for:
-    - get list of all unresolved remarks: `gh api graphql -f query='{repository(owner: "OWNER", name: "REPO") { pullRequest(number: N) { reviewThreads(first: 20) { nodes { id isResolved comments(first: 1) { nodes { path line body } } } } } } }' | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | if .isResolved == false then "[\(.id)] \(.comments.nodes[0].path // "general"):\(.comments.nodes[0].line // "?") - \(.comments.nodes[0].body[:50])..." else empty end'`
-    - new issue creation: `gh issue create --title "Title" --body "Description" [--milestone "MilestoneName"] [--label "label"] [--assignee @me]` (Note: If issue created, link it in reply using thread ID)
-    - commentary as reply to pr comment: `gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Your reply"`
+    - update PR description: `gh api repos/OWNER/REPO/pulls/N -X PATCH -F body="New description"`
+12. **PR Remarks**. Reviewer makes remarks and places them at the correspondent lines of code. If reviewer is AI agent then commands for:
+    - get PR node ID: `gh api graphql -f query='{repository(owner:"OWNER", name:"REPO") { pullRequest(number: N) { id } }}'`
+    - add line comment (GraphQL): `gh api graphql -f query='mutation { addPullRequestReviewThread(input: { pullRequestId: "PR_NODE_ID", line: LINE_NUMBER, side: RIGHT, body: "Comment text", path: "path/to/file.py" }) { thread { id } } }'`
+    - add line comment (REST): `gh api repos/OWNER/REPO/pulls/N/comments -X POST -F body="Comment" -F commit_id=COMMIT_SHA -F path=FILENAME -F line=LINE -F side=RIGHT`
+13. **PR Resolve Remarks**. Assignee reads remarks and for all of unresolved either prepares necessary code changes (going back to **Code Development** stage) or if solving problems pointed by reviewer is hard and requires massive changes of code then new issue should be created for that by assignee. Whether it is the case, human should decide and confirm issue creation. In case issue is created, its link should be placed in the reply to the source reply comment. In case of code changes, small reply to reviewer comment with fix summary should be placed. Commands for:
+    - list all review comments (REST): `gh api repos/OWNER/REPO/pulls/N/comments --jq '.[] | {id: .id, path: .path, body: .body, line: .line, side: .side}'`
+    - list unresolved review threads (GraphQL): `gh api graphql -f query='{repository(owner: "OWNER", name: "REPO") { pullRequest(number: N) { reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes { path line body } } } } } } }' | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | if .isResolved == false then "[\(.id)] \(.comments.nodes[0].path // "general"):\(.comments.nodes[0].line // "?") - \(.comments.nodes[0].body[:50])..." else empty end'`
+    - reply to comment thread: `gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Your reply"`
+    - create new issue: `gh issue create --title "Title" --body "Description" [--milestone "MilestoneName"] [--label "label"] [--assignee @me]` (Note: If issue created, link it in reply using thread ID)
+    - find comment IDs (for deletion): `gh api graphql -f query='{repository(owner:"OWNER", name:"REPO") { pullRequest(number: N) { reviewThreads(first: 100) { nodes { id line comments(first:5) { nodes { id body } } } } } } }'`
+    - delete line comment: `gh api graphql -f query='mutation { deletePullRequestReviewComment(input: {id: "PRRC_ID"}) { clientMutationId } }'`
+    - delete PR/issue comment: `gh api graphql -f query='mutation { deleteIssueComment(input: {id: "IC_ID"}) { clientMutationId } }'`
 14. **PR Confirm Remarks Fix**. Reviewer checks solutions for remarks, and either marks them as resolved, or replies with reason why they consider it unresolved. Also reviewer may add some new remarks. After that **Code Review** stage repeats from beginning until all remarks are resolved. Commands for:
-    - setting resolved commentary mark (if reviewer is AI agent): `gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THREAD_ID" }) { clientMutationId } }'` where THREAD_ID from GraphQL query
-    - adding comment as reply to comment: `gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Your reply"`
+    - resolve thread: `gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THREAD_ID" }) { clientMutationId } }'`
+    - unresolve thread: `gh api graphql -f query='mutation { unresolveReviewThread(input: { threadId: "THREAD_ID" }) { clientMutationId } }'`
+    - reply to thread: `gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Your reply"`
 15. **PR Closure**. PR can be closed only if it has no unresolved reviewer remarks and human directly approved it is done. Comment describing whole development process of this pull request may be added. Approved pull request should be merged to main branch with squash commits strategy. Commands for:
-    - check for unresolved remarks: `gh api graphql -f query='{repository(owner: "OWNER", name: "REPO") { pullRequest(number: N) { reviewThreads(first: 20) { nodes { id isResolved comments(first: 1) { nodes { path line body } } } } } } }' | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | if .isResolved == false then "[\(.id)] \(.comments.nodes[0].path // "general"):\(.comments.nodes[0].line // "?") - \(.comments.nodes[0].body[:50])..." else empty end'` (should return empty)
-    - adding comment to pr not assigned to code: `gh pr comment N --body "Comment text"`
-    - merge pull request with squash commit strategy: `gh pr merge N --squash --delete-branch`
+    - approve PR: `gh pr review N --approve`
+    - request changes: `gh pr review N --request-changes --body "Description of changes needed"`
+    - comment only (no approval/status): `gh pr review N --body "Comment text"`
+    - check for unresolved remarks: `gh api graphql -f query='{repository(owner: "OWNER", name: "REPO") { pullRequest(number: N) { reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes { path line body } } } } } } }' | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | if .isResolved == false then "[\(.id)] \(.comments.nodes[0].path // "general"):\(.comments.nodes[0].line // "?") - \(.comments.nodes[0].body[:50])..." else empty end'` (should return empty; increase `first:` value or add pagination `after:` cursor if PR has more than 100 threads)
+    - add general comment to PR: `gh pr comment N --body "Comment text"`
+    - merge PR with squash: `gh pr merge N --squash --delete-branch`
+
+Note: A user cannot approve their own PR. The PR creator must use a different account to approve.
 
 ### Issue Closing
 
 16. **Issue Close**. If issue is not closed by PR closing, close it. Command for:
     - set close issue state: `gh issue close N`
-17. **Save AI development logs**. This step is optional. Human saves session logs from time to time as markdown files to `sessions/issue<#issue>/` folder. Files may overlap (every next file may contain at the beginning portion of the end of previous file). Compaction may take place. First lines of first files may relate to other issue. AI agent should create one summary file in the format `YEAR-MONTH-DAY_session_<file_index>_issue_<issue_number>_<short_session_description>.md` in the `sessions/` directory (not in issue-specific subfolder). This file should NOT be committed to the repo - placed to project as gist and link to that gist should be attached to issue comment. Commands for:
-    - gist placement: `gh gist create --filename "FILENAME.md" --desc "Session logs for issue #N" FILEPATH`
-    - adding gist link to issue comment: `gh issue comment N --body "Session logs: https://gist.github.com/GIST_ID"`
+17. **Save AI development logs**. This step is optional. The session logger plugin saves logs to `sessions/` with a `current_session.md` symlink pointing to the active file. Use one session per issue. When saving, resolve the symlink and upload the log as a gist, then link it in an issue comment. Commands for:
+    - get current session file: `readlink sessions/current_session.md`
+    - create gist from session file: `gh gist create --filename "FILENAME.md" --desc "Session logs for issue #N" sessions/CURRENT_SESSION_FILENAME`
+    - add gist link to issue comment: `gh issue comment N --body "Session logs: https://gist.github.com/GIST_ID"`
 
 That finalize work on issue.
-
-## GitHub/PR Procedures
-
-### Finding PR Review Comments
-
-To find review threads in a PR with all details including line numbers:
-
-```bash
-gh api graphql -f query='{repository(owner: "OWNER", name: "REPO") { 
-  pullRequest(number: N) { 
-    reviewThreads(first: 20) { 
-      nodes { 
-        id 
-        isResolved
-        comments(first: 1) { 
-          nodes { id body path line } 
-        } 
-      } 
-    } 
-  } 
- } }'
-```
-
-Key fields:
-- `path`: File being commented on
-- `line`: Line number in the diff (can be null)
-- `isResolved`: Boolean - whether the thread is resolved
-- `id`: Comment ID (use for replying)
-- `thread_id`: The thread ID (use for `gh pr-review comments reply`)
-
-Alternative - get simple list (REST API - returns line and side):
-```bash
-gh api repos/OWNER/REPO/pulls/N/comments --jq '.[] | {id: .id, path: .path, body: .body, line: .line, side: .side}'
-```
-
-Key fields:
-- `path`: File being commented on
-- `line`: Line number in the diff (can be null)
-- `side`: RIGHT (shows diff context) or LEFT (shows deleted lines)
-- `id`: Comment ID (use for replying)
-
-### Replying to PR Review Comments
-
-Use the thread ID from above:
-
-```bash
-gh pr-review comments reply N --repo OWNER/REPO --thread-id THREAD_ID --body "Your reply"
-```
-
-### Updating PR Description
-
-**Note**: `gh pr edit` may be deprecated. Use GraphQL instead:
-
-```bash
-# First, get PR node ID:
-PR_ID=$(gh api graphql -f query='{repository(owner:"OWNER",name:"REPO"){pullRequest(number:N){id}}}' --jq '.data.repository.pullRequest.id')
-
-# Update PR body via GraphQL:
-gh api graphql -f query='mutation {
-  updatePullRequest(input: {
-    pullRequestId: "PR_ID",
-    body: "New description text"
-  }) {
-    pullRequest { body }
-  }
-}'
-```
-
-Alternatively, use REST:
-```bash
-gh api repos/OWNER/REPO/pulls/N -X PATCH -F body="New description text"
-```
-
-### Merging PR
-
-```bash
-gh pr merge N --squash --delete-branch
-```
-
-### Adding Line Comments to PR
-
-Use GraphQL `addPullRequestReviewThread` mutation:
-
-```bash
-# First, get PR node ID:
-gh api graphql -f query='{repository(owner:"OWNER", name:"REPO") { pullRequest(number: N) { id } }}'
-
-# Add line comment:
-gh api graphql -f query='mutation {
-  addPullRequestReviewThread(input: {
-    pullRequestId: "PR_NODE_ID",
-    line: LINE_NUMBER,
-    side: RIGHT,
-    body: "Comment text",
-    path: "path/to/file.py"
-  }) {
-    thread { id }
-  }
-}'
-```
-
-Note: `side: RIGHT` shows the comment on the right side of the diff (added lines).
-
-### Deleting Comments
-
-```bash
-# Delete line comment (PRRC_ ID prefix):
-gh api graphql -f query='mutation {
-  deletePullRequestReviewComment(input: {id: "PRRC_ID"}) {
-    clientMutationId
-  }
-}'
-
-# Delete PR/Issue comment (IC_ ID prefix):
-gh api graphql -f query='mutation {
-  deleteIssueComment(input: {id: "IC_ID"}) {
-    clientMutationId
-  }
-}'
-```
-
-To find comment IDs, query review threads:
-```bash
-gh api graphql -f query='{repository(owner:"OWNER", name:"REPO") { 
-  pullRequest(number: N) { 
-    reviewThreads(first: 20) { 
-      nodes { id line comments(first:5) { nodes { id body } } } 
-    } 
-  } 
- }}'
-```
-
-### Resolving/Unresolving Review Threads
-
-```bash
-# Resolve thread:
-gh api graphql -f query='mutation {
-  resolveReviewThread(input: {threadId: "THREAD_ID"}) {
-    clientMutationId
-  }
-}'
-
-# Unresolve thread:
-gh api graphql -f query='mutation {
-  unresolveReviewThread(input: {threadId: "THREAD_ID"}) {
-    clientMutationId
-  }
-}'
-```
-
-### Approving/Requesting Changes on PR
-
-```bash
-# Approve PR:
-gh pr review N --approve
-
-# Request changes:
-gh pr review N --request-changes --body "Description of changes needed"
-
-# Comment only (no approval/status):
-gh pr review N --body "Comment text"
-```
-
-Note: A user cannot approve their own PR. The PR creator must use a different account to approve.
-
----
-
-## Git Commands Reference
-
-### When to Use --amend
-
-Use `git commit --amend` ONLY when:
-1. You just created the commit in this session (not yet pushed)
-2. The commit was created by you (the AI) in this conversation
-3. You need to add a small fix/revision to the most recent commit
-
-**NEVER amend commits that:**
-- Have already been pushed to remote
-- Were created by someone else
-- Are part of a published history
-
-**Commit Fix Options:**
-
-When you need to commit a small fix, ask human for one of these options:
-
-1. **Amend** - Add fix to the most recent commit (only if not pushed)
-2. **New commit** - Create separate commit, then wait for push approval  
-3. **Wait** - Don't commit yet, wait for human review first
-
-Use the `question` tool to ask for confirmation before proceeding.
-
-**Commands:**
-**IMPORTANT: Never push without explicit human approval. AI agent must wait for human to say "approved" or "go ahead" before executing any push command.**
-
-```bash
-# Amend the last commit
-git commit --amend
-
-# Amend with new message
-git commit --amend -m "New message"
-
-# Amend to add files
-git add <files> && git commit --amend --no-edit
-```
 
 ---
 
