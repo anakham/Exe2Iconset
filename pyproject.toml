@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "exe2iconset"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Extract icons from Windows EXE/DLL files and create macOS ICNS files"
 readme = "README.md"
 license = {text = "MIT"}
@@ -48,6 +48,10 @@ exe2iconset-gui = "exe2iconset.gui:run_gui"
 [project.urls]
 Homepage = "https://github.com/anakham/Exe2Iconset"
 Repository = "https://github.com/anakham/Exe2Iconset"
+
+[tool.setuptools_scm]
+write_to = "exe2iconset/_version.py"
+fallback_version = "0.0.0"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -23,7 +23,7 @@ The `.app` bundle is automatically built when you publish a GitHub release:
 
 1. Go to the Releases page
 2. Click "Draft a new release"
-3. Enter version tag (e.g., `v0.2.0`)
+3. Enter version tag (e.g., `v0.x.x`)
 4. Add release notes
 5. Click "Publish release"
 

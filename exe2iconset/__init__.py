@@ -1,4 +1,12 @@
-__version__ = "0.2.0"
+try:
+    from importlib.metadata import version
+
+    __version__ = version("exe2iconset")
+except Exception:
+    try:
+        from ._version import version as __version__
+    except ImportError:
+        __version__ = "0.0.0"
 
 from .core.extract import (
     extract_icons_from_pe,
