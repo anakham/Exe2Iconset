@@ -206,5 +206,8 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# setuptools-scm generated version file
+exe2iconset/_version.py
+
 # ai vibe coding logs
 sessions/

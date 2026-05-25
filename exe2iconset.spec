@@ -8,6 +8,13 @@ import platform
 import sys
 from pathlib import Path
 
+# Read version from installed package at build time
+try:
+    from importlib.metadata import version as _get_version
+    _app_version = _get_version("exe2iconset")
+except Exception:
+    _app_version = "0.0.0"
+
 block_cipher = None
 _root = Path(SPECPATH)
 
@@ -95,8 +102,8 @@ if _target == 'macos':
         info_plist={
             'CFBundleName': 'Exe2Iconset',
             'CFBundleDisplayName': 'Exe2Iconset',
-            'CFBundleVersion': '0.2.0',
-            'CFBundleShortVersionString': '0.2.0',
+            'CFBundleVersion': _app_version,
+            'CFBundleShortVersionString': _app_version,
             'CFBundlePackageType': 'APPL',
             'CFBundleExecutable': _binary_name,
             'LSMinimumSystemVersion': '10.13',

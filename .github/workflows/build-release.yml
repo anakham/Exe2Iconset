@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Git tag (e.g., v0.2.0)'
+        description: 'Git tag (e.g., v0.x.x)'
         required: false
         type: string
   push:
