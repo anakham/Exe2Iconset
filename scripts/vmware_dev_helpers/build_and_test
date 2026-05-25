@@ -9,10 +9,11 @@
 #   ./build_and_test --no-copy-local      # Don't copy to local machine
 #
 # Options:
-#   --clean         Clean build directory before building
-#   --package TYPE  Create package (dmg, zip, appimage)
-#   --no-test       Skip testing on fresh install
-#   --no-copy-local Skip copying app to local machine
+#   --clean              Clean build directory before building
+#   --package TYPE       Create package (dmg, zip, appimage)
+#   --no-test            Skip testing on fresh install
+#   --no-copy-local      Skip copying app to local machine
+#   --skip-activate      Skip VM snapshot activation (VM already running)
 
 set -ex
 
@@ -24,7 +25,7 @@ fi
 
 # Configuration
 PROJECT_DIR='~/Projects/Exe2Iconset'
-LOCAL_DIR="$HOME/Projects/Exe2Iconset"
+LOCAL_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 VM_HOST="mac_hs_vm"
 
 echo "Starting build and test process for Exe2Iconset app bundle on macOS VM..."
@@ -38,6 +39,7 @@ BUILD_CLEAN=false
 BUILD_PACKAGE=""
 TEST_FRESH=true
 COPY_LOCAL=true
+SKIP_ACTIVATE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -57,6 +59,10 @@ while [[ $# -gt 0 ]]; do
             COPY_LOCAL=false
             shift
             ;;
+        --skip-activate)
+            SKIP_ACTIVATE=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             exit 1
@@ -65,8 +71,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Step 1: Activate development snapshot
-echo "=== Step 1: Activating development snapshot ==="
-bash "$LOCAL_DIR/scripts/vmware_dev_helpers/activate_dev_env"
+if [ "$SKIP_ACTIVATE" = false ]; then
+    echo "=== Step 1: Activating development snapshot ==="
+    bash "$LOCAL_DIR/scripts/vmware_dev_helpers/activate_dev_env"
+else
+    echo "=== Step 1: Skipping VM snapshot activation ==="
+fi
 
 # Step 2: Sync repository to VM (excluding .git and using .gitignore)
 echo "=== Step 2: Syncing repository to VM ==="
@@ -74,6 +84,15 @@ rsync -av --exclude='.git/' --filter=':- .gitignore' "$LOCAL_DIR/" "$VM_HOST:$PR
 
 # Step 3: Build the app
 echo "=== Step 3: Building the app ==="
+
+# Detect version from latest git tag for setuptools-scm
+SETUPTOOLS_SCM_PRETEND_VERSION="0.0.0"
+GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+if [ -n "$GIT_TAG" ]; then
+    SETUPTOOLS_SCM_PRETEND_VERSION="${GIT_TAG#v}"
+fi
+echo "Using version: $SETUPTOOLS_SCM_PRETEND_VERSION"
+
 BUILD_ARGS=""
 if [ "$BUILD_CLEAN" = true ]; then
     BUILD_ARGS="--clean"
@@ -81,7 +100,7 @@ fi
 if [ -n "$BUILD_PACKAGE" ]; then
     BUILD_ARGS="$BUILD_ARGS --package $BUILD_PACKAGE"
 fi
-ssh "$VM_HOST" "cd $PROJECT_DIR && bash -l -c 'python3 scripts/build_app.py $BUILD_ARGS'"
+ssh "$VM_HOST" "cd $PROJECT_DIR && SETUPTOOLS_SCM_PRETEND_VERSION='$SETUPTOOLS_SCM_PRETEND_VERSION' bash -l -c 'python3 scripts/build_app.py $BUILD_ARGS'"
 
 # Step 4: Copy to local machine
 if [ "$COPY_LOCAL" = true ]; then
