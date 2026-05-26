@@ -16,10 +16,30 @@ from .core.icns import ICON_TYPE_MAP, create_icns_from_images
 from exe2iconset.gui_dialogs import FilePicker
 
 
+def safe_progress_update(progressbar, current, total):
+    try:
+        if progressbar.winfo_exists():
+            progressbar.config(value=current * 100 // total)
+    except tk.TclError:
+        pass
+
+
+def safe_call_after(root, func):
+    try:
+        if root.winfo_exists():
+            func()
+    except tk.TclError:
+        pass
+
+
 class IconExtractorApp:
-    def __init__(self, root):
+    def __init__(self, root, external_mode=False):
         self.root = root
-        self.root.title("Windows EXE to macOS ICNS Converter")
+        self.external_mode = external_mode
+        if external_mode:
+            self.root.title("Select Icon Series")
+        else:
+            self.root.title("Windows EXE to macOS ICNS Converter")
         self.root.geometry("900x700")
         
         self.dnd_available = TkinterDnD is not None
@@ -72,9 +92,12 @@ class IconExtractorApp:
                 input_dir = input_path
                 input_stem = os.path.basename(input_path)
             
-            self.output_dir.set(input_dir)
-            self.output_name.set(input_stem)
-            self.update_output_preview()
+            if hasattr(self, 'output_dir'):
+                self.output_dir.set(input_dir)
+            if hasattr(self, 'output_name'):
+                self.output_name.set(input_stem)
+            if hasattr(self, 'output_preview'):
+                self.update_output_preview()
             self.log_status(f"Dropped: {input_path}")
             self.extract_icons()
 
@@ -99,36 +122,39 @@ class IconExtractorApp:
         
         ttk.Button(step1_frame, text="Browse...", command=self.browse_input).grid(row=0, column=2, padx=(2, 0))
         
-        self.output_name = tk.StringVar(value="appicon")
-        self.save_icns = tk.BooleanVar(value=True)
-        self.save_iconset = tk.BooleanVar(value=False)
+        if not self.external_mode:
+            self.output_name = tk.StringVar(value="appicon")
+            self.save_icns = tk.BooleanVar(value=True)
+            self.save_iconset = tk.BooleanVar(value=False)
         
-        step2_frame = ttk.LabelFrame(main_frame, text="Step 2: Select Output Path", padding="10")
-        step2_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
-        step2_frame.columnconfigure(1, weight=1)
+            step2_frame = ttk.LabelFrame(main_frame, text="Step 2: Select Output Path", padding="10")
+            step2_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+            step2_frame.columnconfigure(1, weight=1)
         
-        ttk.Label(step2_frame, text="Output Folder:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
+            ttk.Label(step2_frame, text="Output Folder:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
         
-        output_dir_entry = ttk.Entry(step2_frame, textvariable=self.output_dir, width=50)
-        output_dir_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 5))
-        self.output_dir.trace_add('write', lambda *args: self.update_output_preview())
+            output_dir_entry = ttk.Entry(step2_frame, textvariable=self.output_dir, width=50)
+            output_dir_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 5))
+            self.output_dir.trace_add('write', lambda *args: self.update_output_preview())
         
-        ttk.Button(step2_frame, text="Browse...", command=self.browse_output_dir).grid(row=0, column=2)
+            ttk.Button(step2_frame, text="Browse...", command=self.browse_output_dir).grid(row=0, column=2)
         
-        ttk.Label(step2_frame, text="Name:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5))
+            ttk.Label(step2_frame, text="Name:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5))
         
-        output_name_entry = ttk.Entry(step2_frame, textvariable=self.output_name, width=30)
-        output_name_entry.grid(row=1, column=1, sticky=tk.W, padx=(0, 20))
-        self.output_name.trace_add('write', lambda *args: self.update_output_preview())
+            output_name_entry = ttk.Entry(step2_frame, textvariable=self.output_name, width=30)
+            output_name_entry.grid(row=1, column=1, sticky=tk.W, padx=(0, 20))
+            self.output_name.trace_add('write', lambda *args: self.update_output_preview())
         
-        ttk.Checkbutton(step2_frame, text=".icns", variable=self.save_icns, command=self.update_output_preview).grid(row=1, column=2, padx=(10, 0))
-        ttk.Checkbutton(step2_frame, text=".iconset directory", variable=self.save_iconset, command=self.update_output_preview).grid(row=1, column=3)
+            ttk.Checkbutton(step2_frame, text=".icns", variable=self.save_icns, command=self.update_output_preview).grid(row=1, column=2, padx=(10, 0))
+            ttk.Checkbutton(step2_frame, text=".iconset directory", variable=self.save_iconset, command=self.update_output_preview).grid(row=1, column=3)
         
-        self.output_preview = ttk.Label(step2_frame, text="", font=("Arial", 9), foreground="#666")
-        self.output_preview.grid(row=2, column=0, columnspan=4, pady=(5, 0))
+            self.output_preview = ttk.Label(step2_frame, text="", font=("Arial", 9), foreground="#666")
+            self.output_preview.grid(row=2, column=0, columnspan=4, pady=(5, 0))
         
-        step3_frame = ttk.LabelFrame(main_frame, text="Step 3: Select and Convert", padding="10")
-        step3_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        step3_label = "Step 2: Select Icon" if self.external_mode else "Step 3: Select and Convert"
+        step3_frame = ttk.LabelFrame(main_frame, text=step3_label, padding="10")
+        step3_row = 2 if self.external_mode else 3
+        step3_frame.grid(row=step3_row, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
         
         step3_frame.columnconfigure(0, weight=1)
         step3_frame.rowconfigure(1, weight=1)
@@ -152,20 +178,25 @@ class IconExtractorApp:
         self.icon_tree.column("details", width=200, minwidth=200)
         
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self._on_tree_scroll)
-        self.icon_tree.configure(yscrollcommand=vsb.set)
+        def _on_yscroll(*args):
+            vsb.set(*args)
+            self.root.after(50, self._prepare_visible_thumbnails)
+        self.icon_tree.configure(yscrollcommand=_on_yscroll)
         
         self.icon_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         vsb.grid(row=0, column=1, sticky=(tk.N, tk.S))
         
         self.icon_tree.bind("<<TreeviewSelect>>", self._on_tree_select)
         
-        self.convert_btn = ttk.Button(step3_frame, text="Convert to ICNS", command=self.on_convert_click)
+        btn_text = "SELECT" if self.external_mode else "Convert to ICNS"
+        self.convert_btn = ttk.Button(step3_frame, text=btn_text, command=self.on_convert_click)
         self.convert_btn.grid(row=2, column=0, pady=(10, 0), sticky=(tk.W, tk.E))
         
         self.log_messages = []
         
         status_frame = ttk.Frame(main_frame)
-        status_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 5))
+        status_row = 3 if self.external_mode else 4
+        status_frame.grid(row=status_row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 5))
         status_frame.columnconfigure(0, weight=1)
         
         self.status_label = ttk.Label(status_frame, text="Ready", relief=tk.SUNKEN, 
@@ -173,7 +204,8 @@ class IconExtractorApp:
         self.status_label.grid(row=0, column=0, sticky=(tk.W, tk.E))
         self.status_label.bind("<Button-1>", self._show_log_popup)
         
-        main_frame.rowconfigure(3, weight=1)
+        weight_row = 2 if self.external_mode else 3
+        main_frame.rowconfigure(weight_row, weight=1)
     
     def _on_tree_scroll(self, *args):
         self.icon_tree.yview(*args)
@@ -270,7 +302,7 @@ class IconExtractorApp:
     
     def _extract_icons_thread(self):
         def progress_callback(current, total):
-            self.root.after(0, lambda c=current, t=total: self.progress.config(value=c * 100 // t))
+            self.root.after(0, lambda c=current, t=total: safe_progress_update(self.progress, c, t))
         
         try:
             self.log_status("Loading images...")
@@ -278,7 +310,7 @@ class IconExtractorApp:
             
             if not icon_files:
                 self.log_status("No images found.")
-                self.root.after(0, lambda: self.progress.config(value=0))
+                self.root.after(0, lambda: safe_progress_update(self.progress, 0, 1))
                 return
 
             self.icon_series = icon_files
@@ -361,9 +393,11 @@ class IconExtractorApp:
             first_item = self.icon_tree.get_children()[0]
             self.icon_tree.selection_set(first_item)
             self.selected_series_key = first_key
-            self.log_status(f"Found 1 icon series. Click 'Convert' to create ICNS.")
+            action = "SELECT" if self.external_mode else "Convert"
+            self.log_status(f"Found 1 icon series. Click '{action}' to continue.")
         else:
-            self.log_status(f"Found {len(self.icon_series)} icon series. Select one and click 'Convert'.")
+            action = "SELECT" if self.external_mode else "Convert"
+            self.log_status(f"Found {len(self.icon_series)} icon series. Select one and click '{action}'.")
     
     def _on_tree_select(self, event):
         selection = self.icon_tree.selection()
@@ -383,7 +417,16 @@ class IconExtractorApp:
             else:
                 messagebox.showwarning("Select Series", "Please select an icon series from the list.")
                 return
-        self.create_icns()
+        
+        if self.external_mode:
+            self.select_and_return()
+        else:
+            self.create_icns()
+    
+    def select_and_return(self):
+        if self.selected_series_key is not None:
+            self.root.quit()
+            self.root.destroy()
     
     def create_icns(self):
         if (self.selected_series_key is None) or not self.icon_series.get(self.selected_series_key):
@@ -491,12 +534,16 @@ class IconExtractorApp:
         except Exception as e:
             self.log_status(f"Error creating ICNS: {str(e)}")
         finally:
-            self.root.after(0, lambda: self.icon_tree.config(selectmode="browse"))
+            self.root.after(0, lambda: safe_call_after(self.root, lambda: self.icon_tree.config(selectmode="browse")))
     
     def log_status(self, message):
         def update_status():
-            self.log_messages.append(message)
-            self.status_label.config(text=message)
+            try:
+                if self.status_label.winfo_exists():
+                    self.log_messages.append(message)
+                    self.status_label.config(text=message)
+            except tk.TclError:
+                pass
         
         self.root.after(0, update_status)
     
@@ -542,12 +589,15 @@ def _destroy_orphaned_tk_windows():
             pass
 
 
-def run_gui():
+def run_gui(external_mode=False, input_file=None, parent=None):
     global TkinterDnD, DND_FILES
     
     root = None
     
-    if TkinterDnD:
+    if parent:
+        root = tk.Toplevel(parent)
+        root.transient(parent)
+    elif TkinterDnD:
         try:
             root = TkinterDnD.Tk()
         except Exception:
@@ -558,10 +608,35 @@ def run_gui():
     else:
         root = tk.Tk()
     
-    app = IconExtractorApp(root)
+    app = IconExtractorApp(root, external_mode=external_mode)
     
-    def on_closing():
+    if external_mode and input_file:
+        app.input_path.set(input_file)
+        app.extract_icons()
+    
+    result = {}
+    
+    def on_select():
+        if app.selected_series_key:
+            result["series_key"] = app.selected_series_key
+            result["icons"] = app.icon_series[app.selected_series_key]
         root.destroy()
     
-    root.protocol("WM_DELETE_WINDOW", on_closing)
-    root.mainloop()
+    if external_mode:
+        app.convert_btn.config(command=on_select)
+        if parent:
+            root.protocol("WM_DELETE_WINDOW", root.destroy)
+        else:
+            root.protocol("WM_DELETE_WINDOW", lambda: (root.quit(), root.destroy()))
+    else:
+        root.protocol("WM_DELETE_WINDOW", root.destroy)
+    
+    if parent:
+        root.grab_set()
+        parent.wait_window(root)
+    else:
+        root.mainloop()
+    
+    if result:
+        return result
+    return None
