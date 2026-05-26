@@ -16,9 +16,9 @@ def create_dmg_background(output_path: Path, width: int = 480, height: int = 480
         body_font = ImageFont.truetype('LiberationSans-Regular.ttf', 17)
         small_font = ImageFont.truetype('LiberationSans-Bold.ttf', 15)
     except Exception:
-        title_font = ImageFont.load_default()
-        body_font = ImageFont.load_default()
-        small_font = ImageFont.load_default()
+        title_font = ImageFont.load_default(28)
+        body_font = ImageFont.load_default(17)
+        small_font = ImageFont.load_default(15)
     
     # Title centered
     title = "Installation guide (MacOS 10.15+)"
@@ -28,9 +28,9 @@ def create_dmg_background(output_path: Path, width: int = 480, height: int = 480
     
     # Layout: [App Icon] [Instruction Text] [Right Sidebar]
     items = [
-        (1, "Put Exe2Iconset.app to\nApplications folder", 135, 80),
-        (2, "Copy Exit Quarantine.txt\ncontents to clipboard", 135, 180),
-        (3, "Open Terminal, paste\ncommand, press Enter", 135, 280),
+        (1, "Put Exe2Iconset.app to\nApplications folder", 125, 80),
+        (2, "Copy Exit Quarantine.txt\ncontents to clipboard", 125, 180),
+        (3, "Open Terminal, paste\ncommand, press Enter", 125, 280),
     ]
     
     for step_num, step_text, text_x, text_y in items:
@@ -48,10 +48,10 @@ def create_dmg_background(output_path: Path, width: int = 480, height: int = 480
     draw.text(((width - warning_width) // 2, warning_y + 8), warning_text, fill='#ed8936', font=small_font)
     
     # Source info centered
-    source_text = "Also available at pypi.org: pip install exe2iconset"
+    source_text = "(also available at pypi.org: pip install exe2iconset)"
     source_bbox = draw.textbbox((0, 0), source_text, font=small_font)
     source_width = source_bbox[2] - source_bbox[0]
-    draw.text(((width - source_width) // 2, height - 60), source_text, fill='#718096', font=small_font)
+    draw.text(((width - source_width) // 2, 50), source_text, fill='#718096', font=small_font)
     
     # Transparent holes (x, y, width, height) for icons and shortcuts
     holes = [
