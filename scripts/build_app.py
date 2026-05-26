@@ -77,7 +77,7 @@ def install_dependencies():
     if result.returncode != 0:
         print("ERROR: Failed to install dependencies", file=sys.stderr)
         sys.exit(1)
-    result = subprocess.run([str(pip), "install", "setuptools"])
+    result = subprocess.run([str(pip), "install", "setuptools<72"])
     if result.returncode != 0:
         print("ERROR: Failed to install setuptools", file=sys.stderr)
         sys.exit(1)
