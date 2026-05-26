@@ -589,7 +589,7 @@ def _destroy_orphaned_tk_windows():
             pass
 
 
-def run_gui(external_mode=False, input_file=None, parent=None):
+def run_icon_picker(external_mode=False, input_file=None, parent=None):
     global TkinterDnD, DND_FILES
     
     root = None

@@ -12,7 +12,7 @@ except ImportError:
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from exe2iconset import run_gui
+from exe2iconset import run_icon_picker
 
 
 def main():
@@ -55,7 +55,7 @@ def main():
 
 
 def open_picker(parent, input_file):
-    result = run_gui(external_mode=True, input_file=input_file, parent=parent)
+    result = run_icon_picker(external_mode=True, input_file=input_file, parent=parent)
     if result:
         print("Selected:", result["series_key"])
         print("Icons count:", len(result["icons"]))
