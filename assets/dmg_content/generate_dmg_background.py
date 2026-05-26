@@ -92,7 +92,7 @@ def create_dmg_background(output_path: Path, width: int = 480, height: int = 480
 
 
 if __name__ == '__main__':
-    project_root = Path(__file__).parent.parent
+    project_root = Path(__file__).parent.parent.parent
     output = project_root / 'build' / 'dmg_content' / 'dmg_background.png'
     output.parent.mkdir(parents=True, exist_ok=True)
     create_dmg_background(output)
