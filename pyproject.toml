@@ -43,7 +43,7 @@ dev = [
 
 [project.scripts]
 exe2iconset = "exe2iconset.cli:main"
-exe2iconset-gui = "exe2iconset.gui:run_gui"
+exe2iconset-gui = "exe2iconset.gui:run_icon_picker"
 
 [project.urls]
 Homepage = "https://github.com/anakham/Exe2Iconset"

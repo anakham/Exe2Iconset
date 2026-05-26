@@ -40,6 +40,8 @@ __all__ = [
     "create_icns_from_images",
     "ICON_TYPE_MAP",
     "pack_bits_compress",
+    "run_icon_picker",
+    "IconExtractorApp",
 ]
 
-from .gui import run_gui, IconExtractorApp
+from .gui import run_icon_picker, IconExtractorApp

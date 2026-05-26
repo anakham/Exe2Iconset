@@ -43,8 +43,8 @@ python -m exe2iconset
 
 Or import and run:
 ```python
-from exe2iconset import run_gui
-run_gui()
+from exe2iconset import run_icon_picker
+run_icon_picker()
 ```
 
 #### GUI Workflow
