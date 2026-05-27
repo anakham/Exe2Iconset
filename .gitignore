@@ -211,3 +211,6 @@ exe2iconset/_version.py
 
 # ai vibe coding logs
 sessions/
+
+
+.DS_Store

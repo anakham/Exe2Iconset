@@ -77,10 +77,6 @@ def install_dependencies():
     if result.returncode != 0:
         print("ERROR: Failed to install dependencies", file=sys.stderr)
         sys.exit(1)
-    result = subprocess.run([str(pip), "install", "setuptools<72"])
-    if result.returncode != 0:
-        print("ERROR: Failed to install setuptools", file=sys.stderr)
-        sys.exit(1)
     print("Dependencies installed.")
 
 
@@ -328,14 +324,9 @@ def main():
         help="Target platform (default: auto-detect)",
     )
     parser.add_argument(
-        "--no-dmg",
-        action="store_true",
-        help="Skip DMG creation on macOS, use ZIP instead",
-    )
-    parser.add_argument(
         "--package",
-        choices=["none", "zip", "dmg", "appimage"],
-        default="none",
+        choices=["none", "zip", "dmg", "appimage", "auto"],
+        default="auto",
         help="Package type (default: auto - DMG for macOS, ZIP for others)",
     )
 
@@ -349,8 +340,8 @@ def main():
 
     # Determine packaging - auto-detect defaults
     package_type = args.package
-    if package_type == "none":
-        if target_platform == "macos" and not args.no_dmg:
+    if package_type == "auto":
+        if target_platform == "macos":
             package_type = "dmg"
         else:
             package_type = "zip"

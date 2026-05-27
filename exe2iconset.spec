@@ -4,9 +4,102 @@
 Supports macOS, Linux, and Windows builds with platform-specific settings.
 """
 
+import importlib
+import logging
 import platform
 import sys
 from pathlib import Path
+
+# Monkey-patch PyInstaller's macOS code signing helpers on older macOS where
+# codesign_allocate cannot process PKG-extended binaries.
+#
+# Patches:
+#   1. remove_signature_from_binary — use macholib to strip LC_CODE_SIGNATURE
+#      instead of relying on broken codesign --remove on 10.13 (which returns
+#      0 but does nothing).
+#   2. fix_exe_for_code_signing — catch AssertionError/SystemError (raised when
+#      the OS-level codesign_allocate cannot process PKG-extended binaries).
+#   3. sign_binary — catch SystemError (same codesign_allocate issue).
+try:
+    _osx = importlib.import_module('PyInstaller.utils.osx')
+
+    # Patch 1: remove_signature — use macholib to manually strip LC_CODE_SIGNATURE
+    # instead of relying on broken codesign --remove on 10.13 (which returns
+    # 0 but does nothing).  Based on the approach from:
+    # https://github.com/HinTak/mono-modification/blob/macosx-10.13/remove-code-signature.py
+    #
+    # LC_CODE_SIGNATURE is always the last load command.  We delete it, update
+    # the header's ncmds/sizeofcmds, adjust __LINKEDIT.filesize, and truncate
+    # the file to remove the signature blob.
+    try:
+        from macholib.MachO import MachO
+        from macholib.mach_o import LC_CODE_SIGNATURE, LC_SYMTAB
+
+        _orig_remove = _osx.remove_signature_from_binary
+        def _patched_remove(filename):
+            try:
+                executable = MachO(filename)
+                file_size = __import__('os').path.getsize(filename)
+                modified = False
+                last_symtab_end = 0
+
+                for header in executable.headers:
+                    if header.commands[-1][0].cmd != LC_CODE_SIGNATURE:
+                        continue
+                    # Find SYMTAB end — needed for LINKEDIT fixup
+                    for c in header.commands:
+                        if c[0].cmd == LC_SYMTAB:
+                            last_symtab_end = c[1].stroff + c[1].strsize
+                            break
+                    # Remove LC_CODE_SIGNATURE (always last command)
+                    removed = header.commands.pop()
+                    header.header.ncmds -= 1
+                    header.header.sizeofcmds -= removed[0].cmdsize
+                    modified = True
+
+                if modified:
+                    # Update __LINKEDIT filesize/vmsize for the last header
+                    linkedit = None
+                    for c in executable.headers[-1].commands:
+                        if hasattr(c[1], 'segname') and c[1].segname.startswith(b'__LINKEDIT'):
+                            linkedit = c[1]
+                            break
+                    if linkedit:
+                        linkedit.filesize = last_symtab_end - linkedit.fileoff
+                        linkedit.vmsize = linkedit.filesize
+                    # Write updated headers and truncate signature blob
+                    with open(filename, 'rb+') as fp:
+                        executable.write(fp)
+                        fp.truncate(last_symtab_end)
+            except Exception:
+                _orig_remove(filename)
+        _osx.remove_signature_from_binary = _patched_remove
+    except ImportError:
+        pass
+
+    # Patch 2: fix_exe_for_code_signing — absorb AssertionError/SystemError
+    _orig_fix = _osx.fix_exe_for_code_signing
+    def _patched_fix(path):
+        try:
+            _orig_fix(path)
+        except (AssertionError, SystemError) as _e:
+            logging.getLogger().warning(
+                "fix_exe_for_code_signing skipped on %s (expected on 10.13): %s", path, _e
+            )
+    _osx.fix_exe_for_code_signing = _patched_fix
+
+    # Patch 3: sign_binary — absorb SystemError
+    _orig_sign = _osx.sign_binary
+    def _patched_sign(path, identity=None, entitlements=None, **kwargs):
+        try:
+            _orig_sign(path, identity, entitlements, **kwargs)
+        except SystemError as _e:
+            logging.getLogger().warning(
+                "sign_binary skipped on %s (expected on 10.13): %s", path, _e
+            )
+    _osx.sign_binary = _patched_sign
+except (ImportError, AttributeError):
+    pass
 
 # Read version from installed package at build time
 try:

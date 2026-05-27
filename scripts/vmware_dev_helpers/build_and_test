@@ -108,9 +108,9 @@ if [ "$COPY_LOCAL" = true ]; then
     # Use --delete to remove old files and avoid duplication (symlinks becoming real files)
     rsync -av --delete "$VM_HOST:$PROJECT_DIR/dist/Exe2Iconset.app" "$LOCAL_DIR/dist/"
     # Also copy DMG if it was created
-    if [ -n "$BUILD_PACKAGE" ]; then
-        rsync -av --delete "$VM_HOST:$PROJECT_DIR/dist/"*.dmg "$LOCAL_DIR/dist/" 2>/dev/null || true
-    fi
+    rsync -av --delete "$VM_HOST:$PROJECT_DIR/dist/"*.dmg "$LOCAL_DIR/dist/" 2>/dev/null || true
+    # ... and ZIP if it was created
+    rsync -av --delete "$VM_HOST:$PROJECT_DIR/dist/"*.zip "$LOCAL_DIR/dist/" 2>/dev/null || true
 fi
 
 # Step 5: Test on Fresh Install
